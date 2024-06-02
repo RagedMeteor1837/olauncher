@@ -40,7 +40,7 @@ index 0000000..e7febd1
 +    private static final Logger LOGGER = LogManager.getLogger();
 +    private static final String INFO_FILE_NAME = "olauncher_update.json";
 +
-+    private static final URL GITHUB_LATEST_RELEASE_URL = constantURL("https://api.github.com/repos/olauncher/olauncher/releases/latest");
++    private static final URL GITHUB_LATEST_RELEASE_URL = constantURL("https://api.github.com/repos/ragedmeteor1837/olauncher/releases/latest");
 +
 +    private static final long UPDATE_CHECK_FREQ = 3;
 +    private static final TemporalUnit UPDATE_CHECK_FREQ_UNIT = ChronoUnit.HOURS;
