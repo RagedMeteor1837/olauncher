@@ -4,10 +4,10 @@ basedir=$(pwd)
 autooldir=$basedir/AutoOL
 workdir=$basedir/work
 
-OLAUNCHER_VERSION=1.7.3_01
+OLAUNCHER_VERSION=1.0.0
 AUTOOL_VERSION=0.1.0
 
-finalname="olauncher-$OLAUNCHER_VERSION-redist.jar"
+finalname="mclauncher-$OLAUNCHER_VERSION-redist.jar"
 
 if [ ! -e "$autooldir" ]; then
   echo "The AutoOL directory could not be found. Please run 'git submodule update --init'"
@@ -54,7 +54,7 @@ if [ ! -e "$autooldir/target" ]; then
 fi
 
 echo "Generating patch..."
-if ! java -jar "jbsdiff/target/jbsdiff-1.0.jar" diff "../launcher.jar" "$basedir/olauncher/target/olauncher-${OLAUNCHER_VERSION}.jar" "launcher.patch" || [ ! -e "launcher.patch" ]; then
+if ! java -jar "jbsdiff/target/jbsdiff-1.0.jar" diff "../launcher.jar" "$basedir/olauncher/target/mclauncher-${OLAUNCHER_VERSION}.jar" "launcher.patch" || [ ! -e "launcher.patch" ]; then
   echo "Error creating patch"
   exit 1
 fi
@@ -68,9 +68,9 @@ origname=launcher.jar
 origsz=$(du -b "../launcher.jar" | cut -f 1)
 patchres=/launcher.patch
 patchsz=$(du -b "launcher.patch" | cut -f 1)
-finalhash=$(sha1sum "$basedir/olauncher/target/olauncher-${OLAUNCHER_VERSION}.jar" | cut -d ' ' -f 1)
+finalhash=$(sha1sum "$basedir/olauncher/target/mclauncher-${OLAUNCHER_VERSION}.jar" | cut -d ' ' -f 1)
 finalname=patched.jar
-finalsz=$(du -b "$basedir/olauncher/target/olauncher-${OLAUNCHER_VERSION}.jar" | cut -f 1)
+finalsz=$(du -b "$basedir/olauncher/target/mclauncher-${OLAUNCHER_VERSION}.jar" | cut -f 1)
 interactive=true
 #mainClass=
 EOP
