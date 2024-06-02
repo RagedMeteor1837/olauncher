@@ -15,7 +15,7 @@ index 2776ab5..41fc5fc 100644
 -    public static final String URL_RESOURCE_BASE = "http://resources.download.minecraft.net/";
 +    public static final String URL_RESOURCE_BASE = "https://resources.download.minecraft.net/";
      public static final String URL_LIBRARY_BASE = "https://libraries.minecraft.net/";
-     public static final String URL_BLOG = "https://olauncher.github.io/news";
+     public static final String URL_BLOG = "https://ragedmeteor1837.github.io/mcnews.github.io/news";
      public static final String URL_SUPPORT = "http://help.mojang.com/?ref=launcher";
 diff --git a/src/main/java/net/minecraft/launcher/updater/MinecraftVersionManager.java b/src/main/java/net/minecraft/launcher/updater/MinecraftVersionManager.java
 index de78e0e..30d2fa0 100644
