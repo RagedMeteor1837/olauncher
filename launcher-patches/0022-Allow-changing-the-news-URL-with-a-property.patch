@@ -13,7 +13,7 @@ index 41fc5fc..b2267d5 100644
      public static final String URL_RESOURCE_BASE = "https://resources.download.minecraft.net/";
      public static final String URL_LIBRARY_BASE = "https://libraries.minecraft.net/";
 -    public static final String URL_BLOG = "https://olauncher.github.io/news";
-+    public static final String URL_BLOG = System.getProperty("dev.figboot.olauncher.URLNews", "https://olauncher.github.io/news");
++    public static final String URL_BLOG = System.getProperty("dev.figboot.olauncher.URLNews", "https://ragedmeteor1837.github.io/mcnews.github.io/news");
      public static final String URL_SUPPORT = "http://help.mojang.com/?ref=launcher";
      public static final String URL_STATUS_CHECKER = "http://status.mojang.com/check";
      public static final int UNVERSIONED_BOOTSTRAP_VERSION = 0;
