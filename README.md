@@ -17,6 +17,7 @@ This project is maintained on a best-effort basis and updates will only be made 
   - You can still provide your own JVMs
 - Update checking
 - Displays latest release notes
+~~- Displays Mojang server status~~
 
 ## Build from source
 **1. Clone the repository**

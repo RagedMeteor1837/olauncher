@@ -1,0 +1,1290 @@
+From dd028df5f392be64b07b12b2f406fb9c0fd80d2f Mon Sep 17 00:00:00 2001
+From: RagedMeteor1837 <148640131+RagedMeteor1837@users.noreply.github.com>
+Date: Thu, 19 Mar 2026 21:10:02 +0000
+Subject: [PATCH] Major internal changes
+
+
+diff --git a/src/main/java/com/mojang/launcher/SharedLauncherConstants.java b/src/main/java/com/mojang/launcher/SharedLauncherConstants.java
+deleted file mode 100644
+index 854a911..0000000
+--- a/src/main/java/com/mojang/launcher/SharedLauncherConstants.java
++++ /dev/null
+@@ -1,9 +0,0 @@
+-package com.mojang.launcher;
+-
+-public class SharedLauncherConstants {
+-    public static final int VERSION_FORMAT = 14;
+-    public static final String DEFAULT_VERSION_INCOMPATIBILITY_REASON = "This version is incompatible with your computer. Please try another one by going into Edit Profile and selecting one through the dropdown. Sorry!";
+-
+-    public SharedLauncherConstants() {
+-    }
+-}
+diff --git a/src/main/java/net/minecraft/hopper/Crash.java b/src/main/java/net/minecraft/hopper/Crash.java
+deleted file mode 100644
+index 10319fe..0000000
+--- a/src/main/java/net/minecraft/hopper/Crash.java
++++ /dev/null
+@@ -1,22 +0,0 @@
+-package net.minecraft.hopper;
+-
+-public class Crash {
+-    private int id;
+-    private String jira_issue;
+-    private String title;
+-
+-    public Crash() {
+-    }
+-
+-    public int getId() {
+-        return this.id;
+-    }
+-
+-    public String getJira_issue() {
+-        return this.jira_issue;
+-    }
+-
+-    public String getTitle() {
+-        return this.title;
+-    }
+-}
+diff --git a/src/main/java/net/minecraft/hopper/HopperService.java b/src/main/java/net/minecraft/hopper/HopperService.java
+deleted file mode 100644
+index 96e7665..0000000
+--- a/src/main/java/net/minecraft/hopper/HopperService.java
++++ /dev/null
+@@ -1,61 +0,0 @@
+-package net.minecraft.hopper;
+-
+-import com.google.gson.Gson;
+-import java.io.IOException;
+-import java.net.Proxy;
+-import java.net.URL;
+-import java.util.HashMap;
+-import java.util.Map;
+-
+-public final class HopperService {
+-    private static final String BASE_URL = "http://hopper.minecraft.net/crashes/";
+-    private static final URL ROUTE_SUBMIT = Util.constantURL("http://hopper.minecraft.net/crashes/submit_report/");
+-    private static final URL ROUTE_PUBLISH = Util.constantURL("http://hopper.minecraft.net/crashes/publish_report/");
+-    private static final String[] INTERESTING_SYSTEM_PROPERTY_KEYS = new String[]{"os.version", "os.name", "os.arch", "java.version", "java.vendor", "sun.arch.data.model"};
+-    private static final Gson GSON = new Gson();
+-
+-    public HopperService() {
+-    }
+-
+-    public static SubmitResponse submitReport(Proxy var0, String var1, String var2, String var3) throws IOException {
+-        return submitReport(var0, var1, var2, var3, (Map)null);
+-    }
+-
+-    public static SubmitResponse submitReport(Proxy var0, String var1, String var2, String var3, Map<String, String> var4) throws IOException {
+-        HashMap var5 = new HashMap();
+-        if (var4 != null) {
+-            var5.putAll(var4);
+-        }
+-
+-        String[] var6 = INTERESTING_SYSTEM_PROPERTY_KEYS;
+-        int var7 = var6.length;
+-
+-        for(int var8 = 0; var8 < var7; ++var8) {
+-            String var9 = var6[var8];
+-            String var10 = System.getProperty(var9);
+-            if (var10 != null) {
+-                var5.put(var9, var10);
+-            }
+-        }
+-
+-        SubmitRequest var11 = new SubmitRequest(var1, var2, var3, var5);
+-        return (SubmitResponse)makeRequest(var0, ROUTE_SUBMIT, var11, SubmitResponse.class);
+-    }
+-
+-    public static PublishResponse publishReport(Proxy var0, Report var1) throws IOException {
+-        PublishRequest var2 = new PublishRequest(var1);
+-        return (PublishResponse)makeRequest(var0, ROUTE_PUBLISH, var2, PublishResponse.class);
+-    }
+-
+-    private static <T extends Response> T makeRequest(Proxy var0, URL var1, Object var2, Class<T> var3) throws IOException {
+-        String var4 = Util.performPost(var1, GSON.toJson(var2), var0, "application/json", true);
+-        T var5 = GSON.fromJson(var4, var3); // olauncher - use generic
+-        if (var5 == null) {
+-            return null;
+-        } else if (var5.getError() != null) {
+-            throw new IOException(var5.getError());
+-        } else {
+-            return var5;
+-        }
+-    }
+-}
+diff --git a/src/main/java/net/minecraft/hopper/Problem.java b/src/main/java/net/minecraft/hopper/Problem.java
+deleted file mode 100644
+index 049d2e0..0000000
+--- a/src/main/java/net/minecraft/hopper/Problem.java
++++ /dev/null
+@@ -1,22 +0,0 @@
+-package net.minecraft.hopper;
+-
+-public class Problem {
+-    private String title;
+-    private String description;
+-    private String url;
+-
+-    public Problem() {
+-    }
+-
+-    public String getTitle() {
+-        return this.title;
+-    }
+-
+-    public String getDescription() {
+-        return this.description;
+-    }
+-
+-    public String getUrl() {
+-        return this.url;
+-    }
+-}
+diff --git a/src/main/java/net/minecraft/hopper/PublishRequest.java b/src/main/java/net/minecraft/hopper/PublishRequest.java
+deleted file mode 100644
+index 37a97b9..0000000
+--- a/src/main/java/net/minecraft/hopper/PublishRequest.java
++++ /dev/null
+@@ -1,11 +0,0 @@
+-package net.minecraft.hopper;
+-
+-public class PublishRequest {
+-    private String token;
+-    private int report_id;
+-
+-    public PublishRequest(Report var1) {
+-        this.report_id = var1.getId();
+-        this.token = var1.getToken();
+-    }
+-}
+diff --git a/src/main/java/net/minecraft/hopper/PublishResponse.java b/src/main/java/net/minecraft/hopper/PublishResponse.java
+deleted file mode 100644
+index 82bd45e..0000000
+--- a/src/main/java/net/minecraft/hopper/PublishResponse.java
++++ /dev/null
+@@ -1,22 +0,0 @@
+-package net.minecraft.hopper;
+-
+-public class PublishResponse extends Response {
+-    private Report report;
+-    private Crash crash;
+-    private Problem problem;
+-
+-    public PublishResponse() {
+-    }
+-
+-    public Report getReport() {
+-        return this.report;
+-    }
+-
+-    public Crash getCrash() {
+-        return this.crash;
+-    }
+-
+-    public Problem getProblem() {
+-        return this.problem;
+-    }
+-}
+diff --git a/src/main/java/net/minecraft/hopper/Report.java b/src/main/java/net/minecraft/hopper/Report.java
+deleted file mode 100644
+index 00d09e5..0000000
+--- a/src/main/java/net/minecraft/hopper/Report.java
++++ /dev/null
+@@ -1,26 +0,0 @@
+-package net.minecraft.hopper;
+-
+-public class Report {
+-    private int id;
+-    private boolean published;
+-    private String token;
+-
+-    public Report() {
+-    }
+-
+-    public int getId() {
+-        return this.id;
+-    }
+-
+-    public boolean isPublished() {
+-        return this.published;
+-    }
+-
+-    public String getToken() {
+-        return this.token;
+-    }
+-
+-    public boolean canBePublished() {
+-        return this.getToken() != null;
+-    }
+-}
+diff --git a/src/main/java/net/minecraft/hopper/Response.java b/src/main/java/net/minecraft/hopper/Response.java
+deleted file mode 100644
+index 4ab585f..0000000
+--- a/src/main/java/net/minecraft/hopper/Response.java
++++ /dev/null
+@@ -1,12 +0,0 @@
+-package net.minecraft.hopper;
+-
+-public class Response {
+-    private String error;
+-
+-    public Response() {
+-    }
+-
+-    public String getError() {
+-        return this.error;
+-    }
+-}
+diff --git a/src/main/java/net/minecraft/hopper/SubmitRequest.java b/src/main/java/net/minecraft/hopper/SubmitRequest.java
+deleted file mode 100644
+index 135229f..0000000
+--- a/src/main/java/net/minecraft/hopper/SubmitRequest.java
++++ /dev/null
+@@ -1,17 +0,0 @@
+-package net.minecraft.hopper;
+-
+-import java.util.Map;
+-
+-public class SubmitRequest {
+-    private String report;
+-    private String version;
+-    private String product;
+-    private Map<String, String> environment;
+-
+-    public SubmitRequest(String var1, String var2, String var3, Map<String, String> var4) {
+-        this.report = var1;
+-        this.version = var3;
+-        this.product = var2;
+-        this.environment = var4;
+-    }
+-}
+diff --git a/src/main/java/net/minecraft/hopper/SubmitResponse.java b/src/main/java/net/minecraft/hopper/SubmitResponse.java
+deleted file mode 100644
+index 74a13b4..0000000
+--- a/src/main/java/net/minecraft/hopper/SubmitResponse.java
++++ /dev/null
+@@ -1,22 +0,0 @@
+-package net.minecraft.hopper;
+-
+-public class SubmitResponse extends Response {
+-    private Report report;
+-    private Crash crash;
+-    private Problem problem;
+-
+-    public SubmitResponse() {
+-    }
+-
+-    public Report getReport() {
+-        return this.report;
+-    }
+-
+-    public Crash getCrash() {
+-        return this.crash;
+-    }
+-
+-    public Problem getProblem() {
+-        return this.problem;
+-    }
+-}
+diff --git a/src/main/java/net/minecraft/hopper/Util.java b/src/main/java/net/minecraft/hopper/Util.java
+deleted file mode 100644
+index d5cd795..0000000
+--- a/src/main/java/net/minecraft/hopper/Util.java
++++ /dev/null
+@@ -1,58 +0,0 @@
+-package net.minecraft.hopper;
+-
+-import java.io.DataOutputStream;
+-import java.io.IOException;
+-import java.io.InputStream;
+-import java.net.HttpURLConnection;
+-import java.net.MalformedURLException;
+-import java.net.Proxy;
+-import java.net.URL;
+-import java.nio.charset.Charset;
+-import org.apache.commons.io.IOUtils;
+-
+-public class Util {
+-    public Util() {
+-    }
+-
+-    public static String performPost(URL var0, String var1, Proxy var2, String var3, boolean var4) throws IOException {
+-        HttpURLConnection var5 = (HttpURLConnection)var0.openConnection(var2);
+-        byte[] var6 = var1.getBytes(Charset.forName("UTF-8"));
+-        var5.setConnectTimeout(15000);
+-        var5.setReadTimeout(15000);
+-        var5.setRequestMethod("POST");
+-        var5.setRequestProperty("Content-Type", var3 + "; charset=utf-8");
+-        var5.setRequestProperty("Content-Length", "" + var6.length);
+-        var5.setRequestProperty("Content-Language", "en-US");
+-        var5.setUseCaches(false);
+-        var5.setDoInput(true);
+-        var5.setDoOutput(true);
+-        DataOutputStream var7 = new DataOutputStream(var5.getOutputStream());
+-        var7.write(var6);
+-        var7.flush();
+-        var7.close();
+-        InputStream var8 = null;
+-
+-        try {
+-            var8 = var5.getInputStream();
+-        } catch (IOException var10) {
+-            if (!var4) {
+-                throw var10;
+-            }
+-
+-            var8 = var5.getErrorStream();
+-            if (var8 == null) {
+-                throw var10;
+-            }
+-        }
+-
+-        return IOUtils.toString(var8);
+-    }
+-
+-    public static URL constantURL(String var0) {
+-        try {
+-            return new URL(var0);
+-        } catch (MalformedURLException var2) {
+-            throw new Error(var2);
+-        }
+-    }
+-}
+diff --git a/src/main/java/net/minecraft/launcher/LauncherConstants.java b/src/main/java/net/minecraft/launcher/LauncherConstants.java
+index a74988a..26c9674 100644
+--- a/src/main/java/net/minecraft/launcher/LauncherConstants.java
++++ b/src/main/java/net/minecraft/launcher/LauncherConstants.java
+@@ -18,26 +18,16 @@ public class LauncherConstants {
+     public static final int VERSION_FORMAT = 21;
+     public static final int PROFILES_FORMAT = 1;
+     public static final URI URL_REGISTER = constantURI("https://account.microsoft.com/account/");
+-    public static final String URL_JAR_FALLBACK = "https://s3.amazonaws.com/Minecraft.Download/";
+     public static final String URL_RESOURCE_BASE = "https://resources.download.minecraft.net/";
+     public static final String URL_LIBRARY_BASE = "https://libraries.minecraft.net/";
+     public static final String URL_BLOG = System.getProperty("dev.figboot.olauncher.URLNews", "https://ragedmeteor1837.github.io/mcnews/news/");
+     public static final String URL_ABOUT = System.getProperty("dev.figboot.olauncher.URLAbout", "https://ragedmeteor1837.github.io/olauncherabout/news/");
+     public static final String URL_GITHUB_REPO = System.getProperty("dev.figboot.olauncher.URLGitHub", "https://github.com/ragedmeteor1837/olauncher");
+     public static final String URL_SUPPORT = "https://help.minecraft.net/";
+-    public static final String URL_STATUS_CHECKER = "https://olauncherstatus.onrender.com/status";
+-    public static final int UNVERSIONED_BOOTSTRAP_VERSION = 0;
+-    public static final int MINIMUM_BOOTSTRAP_SUPPORTED = 4;
+-    public static final int SUPER_COOL_BOOTSTRAP_VERSION = 100;
+-    public static final String URL_BOOTSTRAP_DOWNLOAD = "https://mojang.com/2013/06/minecraft-1-6-pre-release/";
+     public static final String[] BOOTSTRAP_OUT_OF_DATE_BUTTONS = new String[]{"Go to URL", "Close"};
+     public static final String LAUNCHER_OUT_OF_DATE_MESSAGE = "It looks like you've used a newer launcher than this one! If you go back to using this one, we will need to reset your configuration.";
+     public static final String[] LAUNCHER_OUT_OF_DATE_BUTTONS = new String[]{"Nevermind, close this launcher", "I'm sure. Reset my settings."};
+-    public static final String LAUNCHER_NOT_NATIVE_MESSAGE = "This shortcut to the launcher is out of date. Please delete it and remake it to the new launcher, which we will start for you now.";
+     public static final String[] CONFIRM_PROFILE_DELETION_OPTIONS = new String[]{"Delete profile", "Cancel"};
+-    public static final URI URL_FORGOT_USERNAME = constantURI("http://help.mojang.com/customer/portal/articles/1233873?ref=launcher");
+-    public static final URI URL_FORGOT_PASSWORD_MINECRAFT = constantURI("http://help.mojang.com/customer/portal/articles/329524-change-or-forgot-password?ref=launcher");
+-    public static final URI URL_FORGOT_MIGRATED_EMAIL = constantURI("http://help.mojang.com/customer/portal/articles/1205055-minecraft-launcher-error---migrated-account?ref=launcher");
+     public static final URI URL_DEMO_HELP = constantURI("https://help.minecraft.net/hc/en-us/articles/4408948974989-Minecraft-Java-Edition-Demo-Mode");
+     public static final URI URL_UPGRADE_WINDOWS = constantURI("https://launcher.mojang.com/download/MinecraftInstaller.msi");
+     public static final URI URL_UPGRADE_OSX = constantURI("https://launcher.mojang.com/download/Minecraft.dmg");
+diff --git a/src/main/java/net/minecraft/launcher/game/MinecraftGameRunner.java b/src/main/java/net/minecraft/launcher/game/MinecraftGameRunner.java
+index fd7f8c7..38e6564 100644
+--- a/src/main/java/net/minecraft/launcher/game/MinecraftGameRunner.java
++++ b/src/main/java/net/minecraft/launcher/game/MinecraftGameRunner.java
+@@ -47,8 +47,6 @@ import java.util.zip.ZipFile;
+ import java.util.Arrays;
+ import java.util.List;
+ import java.util.ArrayList;
+-import java.util.concurrent.TimeUnit;
+-
+ import dev.figboot.olauncher.auth.MicrosoftUserAuthentication;
+ import dev.figboot.olauncher.launcher.runtime.RuntimesManifest;
+ import dev.figboot.olauncher.util.UUIDGenerator;
+@@ -187,76 +185,46 @@ public class MinecraftGameRunner extends AbstractGameRunner implements GameProce
+ 
+             List<String> finalArgs = new ArrayList<>(Arrays.asList(baseArgs));
+ 
+-            // Detect the *selected* JVM by running "<java> -version" and append args if it's Java 1.8
+-            boolean selectedIsJre8 = false;
+-            if (javaPath != null) {
+-                try {
+-                    String exe = javaPath;
+-                    File jf = new File(javaPath);
+-                    if (jf.isDirectory()) {
+-                        File bin = new File(jf, "bin");
+-                        File jexe = new File(bin, System.getProperty("os.name").toLowerCase().contains("win") ? "java.exe" : "java");
+-                        exe = jexe.getAbsolutePath();
+-                    }
+-                    ProcessBuilder pb = new ProcessBuilder(exe, "-version");
+-                    pb.redirectErrorStream(true);
+-                    Process p = pb.start();
+-                    StringBuilder out = new StringBuilder();
+-                    try (BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
+-                        String ln;
+-                        while ((ln = r.readLine()) != null) out.append(ln).append('\n');
+-                    }
+-                    p.waitFor(2, TimeUnit.SECONDS);
+-                    String lower = out.toString().toLowerCase();
+-                    selectedIsJre8 = lower.contains("1.8") || lower.contains("java version \"1.8");
+-                } catch (Exception e) {
+-                    LOGGER.debug("Couldn't probe selected JVM version for " + javaPath, e);
+-                }
+-            }
++            // Use the Java version required by the game version metadata — this is the same data
++            // that drove bundled runtime selection, and JavaVersionInfo.DEFAULT covers legacy
++            // versions that predate the javaVersion field (all of which require JRE 8).
++            boolean selectedIsJre8 = this.getVersion().getJavaVersion().getMajorVersion() == 8;
+ 
+-            // extract bundled truststore next to the launcher JAR (cross-platform), then add JVM args for JRE 8
+-            File extractedTrustStore = null;
+-            try {
+-                File jarDir = null;
++            if (selectedIsJre8) {
++                // extract bundled truststore next to the launcher JAR, then add JVM args
++                File extractedTrustStore = null;
+                 try {
+-                    java.net.URL codeLoc = MinecraftGameRunner.class.getProtectionDomain().getCodeSource().getLocation();
+-                    if (codeLoc != null) {
+-                        File codeFile = new File(codeLoc.toURI());
+-                        jarDir = codeFile.isFile() ? codeFile.getParentFile() : codeFile;
++                    File jarDir = null;
++                    try {
++                        java.net.URL codeLoc = MinecraftGameRunner.class.getProtectionDomain().getCodeSource().getLocation();
++                        if (codeLoc != null) {
++                            File codeFile = new File(codeLoc.toURI());
++                            jarDir = codeFile.isFile() ? codeFile.getParentFile() : codeFile;
++                        }
++                    } catch (Exception ex) {
++                        jarDir = null;
+                     }
+-                } catch (Exception ex) {
+-                    // fall back to working directory if we can't resolve code location
+-                    jarDir = null;
+-                }
+ 
+-                if (jarDir == null) jarDir = this.getLauncher().getWorkingDirectory();
+-
+-                try (InputStream is = MinecraftGameRunner.class.getResourceAsStream("/mojang-trust.jks")) {
+-                    if (is != null) {
+-                        extractedTrustStore = new File(jarDir, "mojang-trust.jks");
+-                        if (!extractedTrustStore.isFile()) {
+-                            // write resource out
+-                            try (OutputStream os = new FileOutputStream(extractedTrustStore)) {
+-                                byte[] buf = new byte[8192];
+-                                int r;
+-                                while ((r = is.read(buf)) != -1) os.write(buf, 0, r);
++                    if (jarDir == null) jarDir = this.getLauncher().getWorkingDirectory();
++
++                    extractedTrustStore = new File(jarDir, "mojang-trust.jks");
++                    if (!extractedTrustStore.isFile()) {
++                        try (InputStream is = MinecraftGameRunner.class.getResourceAsStream("/mojang-trust.jks")) {
++                            if (is != null) {
++                                Files.copy(is, extractedTrustStore.toPath());
++                            } else {
++                                LOGGER.debug("mojang-trust.jks resource not found in launcher JAR");
++                                extractedTrustStore = null;
+                             }
+                         }
+-                    } else {
+-                        LOGGER.debug("mojang-trust.jks resource not found in launcher JAR");
+                     }
++                } catch (IOException ioe) {
++                    LOGGER.warn("Failed to extract mojang-trust.jks to disk", ioe);
++                    extractedTrustStore = null;
+                 }
+-            } catch (IOException ioe) {
+-                LOGGER.warn("Failed to extract mojang-trust.jks to disk", ioe);
+-                extractedTrustStore = null;
+-            }
+ 
+-            if (selectedIsJre8) {
+-                if (extractedTrustStore != null && extractedTrustStore.isFile()) {
++                if (extractedTrustStore != null) {
+                     finalArgs.add("-Djavax.net.ssl.trustStore=" + extractedTrustStore.getAbsolutePath());
+-                } else {
+-                    // fallback: try resource path (unlikely to work), kept for debug
+-                    finalArgs.add("-Djavax.net.ssl.trustStore=/mojang-trust.jks");
+                 }
+                 finalArgs.add("-Djavax.net.ssl.trustStorePassword=changeit");
+                 finalArgs.add("-Djdk.tls.client.protocols=TLSv1.2");
+diff --git a/src/main/java/net/minecraft/launcher/profile/Profile.java b/src/main/java/net/minecraft/launcher/profile/Profile.java
+index 9fb9bd6..acc1786 100644
+--- a/src/main/java/net/minecraft/launcher/profile/Profile.java
++++ b/src/main/java/net/minecraft/launcher/profile/Profile.java
+@@ -16,8 +16,6 @@ public class Profile implements Comparable<Profile> {
+     // olauncher - modernize default JVM arguments
+     public static final String DEFAULT_JRE_ARGUMENTS_64BIT = "-Xmx2G -XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M";
+     public static final String DEFAULT_JRE_ARGUMENTS_32BIT = "-Xmx2G -XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M";
+-    public static final String DEFAULT_JRE_ARGUMENTS_64BIT_JRE8 = "-Xmx2G -XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M -Djavax.net.ssl.trustStore=\"/mojang-trust.jks\" -Djavax.net.ssl.trustStorePassword=changeit -Djdk.tls.client.protocols=TLSv1.2";
+-    public static final String DEFAULT_JRE_ARGUMENTS_32BIT_JRE8 = "-Xmx2G -XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M -Djavax.net.ssl.trustStore=\"/mojang-trust.jks\" -Djavax.net.ssl.trustStorePassword=changeit -Djdk.tls.client.protocols=TLSv1.2";
+     public static final Profile.Resolution DEFAULT_RESOLUTION = new Profile.Resolution(854, 480);
+     public static final LauncherVisibilityRule DEFAULT_LAUNCHER_VISIBILITY;
+     @Deprecated
+@@ -32,7 +30,6 @@ public class Profile implements Comparable<Profile> {
+     @Deprecated
+     private Set<MinecraftReleaseType> allowedReleaseTypes;
+     private String playerUUID;
+-    private Boolean useHopperCrashService;
+     private LauncherVisibilityRule launcherVisibilityOnGameClose;
+ 
+     public Profile() {
+@@ -48,7 +45,6 @@ public class Profile implements Comparable<Profile> {
+         this.javaArgs = var1.javaArgs;
+         this.resolution = var1.resolution == null ? null : new Profile.Resolution(var1.resolution);
+         this.allowedReleaseTypes = var1.allowedReleaseTypes == null ? null : Sets.newHashSet(var1.allowedReleaseTypes);
+-        this.useHopperCrashService = var1.useHopperCrashService;
+         this.launcherVisibilityOnGameClose = var1.launcherVisibilityOnGameClose;
+     }
+ 
+@@ -124,14 +120,6 @@ public class Profile implements Comparable<Profile> {
+         this.allowedReleaseTypes = var1;
+     }
+ 
+-    public boolean getUseHopperCrashService() {
+-        return this.useHopperCrashService == null;
+-    }
+-
+-    public void setUseHopperCrashService(boolean var1) {
+-        this.useHopperCrashService = var1 ? null : false;
+-    }
+-
+     public VersionFilter<MinecraftReleaseType> getVersionFilter() {
+         VersionFilter var1 = (new VersionFilter(MinecraftReleaseTypeFactory.instance())).setMaxCount(Integer.MAX_VALUE);
+         if (this.allowedReleaseTypes == null) {
+diff --git a/src/main/java/net/minecraft/launcher/ui/bottombar/SidebarGridForm.java b/src/main/java/net/minecraft/launcher/ui/bottombar/SidebarGridForm.java
+deleted file mode 100644
+index c5a1d8b..0000000
+--- a/src/main/java/net/minecraft/launcher/ui/bottombar/SidebarGridForm.java
++++ /dev/null
+@@ -1,35 +0,0 @@
+-package net.minecraft.launcher.ui.bottombar;
+-
+-import java.awt.Component;
+-import java.awt.GridBagConstraints;
+-import java.awt.GridBagLayout;
+-import javax.swing.JPanel;
+-
+-public abstract class SidebarGridForm extends JPanel {
+-    protected SidebarGridForm() {
+-    }
+-
+-    protected void createInterface() {
+-        GridBagLayout var1 = new GridBagLayout();
+-        GridBagConstraints var2 = new GridBagConstraints();
+-        this.setLayout(var1);
+-        this.populateGrid(var2);
+-    }
+-
+-    protected abstract void populateGrid(GridBagConstraints var1);
+-
+-    protected <T extends Component> T add(T var1, GridBagConstraints var2, int var3, int var4, int var5, int var6) {
+-        return this.add(var1, var2, var3, var4, var5, var6, 10);
+-    }
+-
+-    protected <T extends Component> T add(T var1, GridBagConstraints var2, int var3, int var4, int var5, int var6, int var7) {
+-        var2.gridx = var3;
+-        var2.gridy = var4;
+-        var2.weightx = (double)var5;
+-        var2.weighty = 1.0D;
+-        var2.gridwidth = var6;
+-        var2.anchor = var7;
+-        this.add(var1, var2);
+-        return var1;
+-    }
+-}
+diff --git a/src/main/java/net/minecraft/launcher/ui/bottombar/StatusPanelForm.java b/src/main/java/net/minecraft/launcher/ui/bottombar/StatusPanelForm.java
+deleted file mode 100644
+index a25f3a4..0000000
+--- a/src/main/java/net/minecraft/launcher/ui/bottombar/StatusPanelForm.java
++++ /dev/null
+@@ -1,84 +0,0 @@
+-package net.minecraft.launcher.ui.bottombar;
+-
+-import com.google.gson.Gson;
+-import com.google.gson.GsonBuilder;
+-import com.google.gson.reflect.TypeToken;
+-import com.mojang.launcher.Http;
+-import com.mojang.launcher.updater.LowerCaseEnumTypeAdapterFactory;
+-import java.awt.GridBagConstraints;
+-import java.net.URL;
+-import java.util.Iterator;
+-import java.util.List;
+-import java.util.Map;
+-import javax.swing.JLabel;
+-import net.minecraft.launcher.Launcher;
+-import org.apache.logging.log4j.LogManager;
+-import org.apache.logging.log4j.Logger;
+-
+-public class StatusPanelForm extends SidebarGridForm {
+-    private static final Logger LOGGER = LogManager.getLogger();
+-    private static final String SERVER_SESSION = "sessionserver.mojang.com";
+-    private static final String SERVER_LOGIN = "login.microsoftonline.com";
+-    private final Launcher minecraftLauncher;
+-    private final JLabel sessionStatus = new JLabel("???");
+-    private final JLabel loginStatus = new JLabel("???");
+-    private final Gson gson = (new GsonBuilder()).registerTypeAdapterFactory(new LowerCaseEnumTypeAdapterFactory()).create();
+-
+-    public StatusPanelForm(Launcher var1) {
+-        this.minecraftLauncher = var1;
+-        this.createInterface();
+-        this.refreshStatuses();
+-    }
+-
+-    protected void populateGrid(GridBagConstraints var1) {
+-        this.add(new JLabel("Multiplayer:", 2), var1, 0, 0, 0, 1, 17);
+-        this.add(this.sessionStatus, var1, 1, 0, 1, 1);
+-        this.add(new JLabel("Login:", 2), var1, 0, 1, 0, 1, 17);
+-        this.add(this.loginStatus, var1, 1, 1, 1, 1);
+-    }
+-
+-    public JLabel getSessionStatus() {
+-        return this.sessionStatus;
+-    }
+-
+-    public JLabel getLoginStatus() {
+-        return this.loginStatus;
+-    }
+-
+-    public void refreshStatuses() {
+-        this.minecraftLauncher.getLauncher().getVersionManager().getExecutorService().submit(new Runnable() {
+-            public void run() {
+-                try {
+-                    TypeToken var1 = new TypeToken<List<Map<String, StatusPanelForm.ServerStatus>>>() {
+-                    };
+-                    List var2 = (List)StatusPanelForm.this.gson.fromJson(Http.performGet(new URL("https://olauncherstatus.onrender.com/status"), StatusPanelForm.this.minecraftLauncher.getLauncher().getProxy()), var1.getType());
+-                    Iterator var3 = var2.iterator();
+-
+-                    while(var3.hasNext()) {
+-                        Map var4 = (Map)var3.next();
+-                        if (var4.containsKey("login.microsoftonline.com")) {
+-                            StatusPanelForm.this.loginStatus.setText(((StatusPanelForm.ServerStatus)var4.get("login.microsoftonline.com")).title);
+-                        } else if (var4.containsKey("sessionserver.mojang.com")) {
+-                            StatusPanelForm.this.sessionStatus.setText(((StatusPanelForm.ServerStatus)var4.get("sessionserver.mojang.com")).title);
+-                        }
+-                    }
+-                } catch (Exception var5) {
+-                    StatusPanelForm.LOGGER.error("Couldn't get server status", var5);
+-                }
+-
+-            }
+-        });
+-    }
+-
+-    public static enum ServerStatus {
+-        GREEN("Online, no problems detected."),
+-        YELLOW("May be experiencing issues."),
+-        RED("Offline, experiencing problems.");
+-
+-        private final String title;
+-
+-        private ServerStatus(String var3) {
+-            this.title = var3;
+-        }
+-    }
+-}
+diff --git a/src/main/java/net/minecraft/launcher/ui/popups/login/AuthErrorForm.java b/src/main/java/net/minecraft/launcher/ui/popups/login/AuthErrorForm.java
+index 7ff5584..604859c 100644
+--- a/src/main/java/net/minecraft/launcher/ui/popups/login/AuthErrorForm.java
++++ b/src/main/java/net/minecraft/launcher/ui/popups/login/AuthErrorForm.java
+@@ -1,12 +1,5 @@
+ package net.minecraft.launcher.ui.popups.login;
+ 
+-import com.google.gson.Gson;
+-import com.google.gson.GsonBuilder;
+-import com.google.gson.reflect.TypeToken;
+-import com.mojang.launcher.Http;
+-import com.mojang.launcher.updater.LowerCaseEnumTypeAdapterFactory;
+-import java.net.URL;
+-import java.util.Map;
+ import javax.swing.JLabel;
+ import javax.swing.JPanel;
+ import javax.swing.SwingUtilities;
+@@ -16,7 +9,6 @@ import org.apache.commons.lang3.exception.ExceptionUtils;
+ public class AuthErrorForm extends JPanel {
+     private final LogInPopup popup;
+     private final JLabel errorLabel = new JLabel();
+-    private final Gson gson = (new GsonBuilder()).registerTypeAdapterFactory(new LowerCaseEnumTypeAdapterFactory()).create();
+ 
+     public AuthErrorForm(LogInPopup var1) {
+         this.popup = var1;
+@@ -64,10 +56,6 @@ public class AuthErrorForm extends JPanel {
+             }
+ 
+             this.errorLabel.setText("<html><div style='text-align: center;'>" + sb + " </div></html>");
+-            if (!this.isVisible()) {
+-                this.refreshStatuses();
+-            }
+-
+             this.setVisible(true);
+         } else {
+             SwingUtilities.invokeLater(new Runnable() {
+@@ -78,33 +66,4 @@ public class AuthErrorForm extends JPanel {
+         }
+ 
+     }
+-
+-    public void refreshStatuses() {
+-        this.popup.getMinecraftLauncher().getLauncher().getVersionManager().getExecutorService().submit(new Runnable() {
+-            public void run() {
+-                try {
+-                    TypeToken var1 = new TypeToken<Map<String, AuthErrorForm.ServerStatus>>() {
+-                    };
+-                    Map var2 = (Map)AuthErrorForm.this.gson.fromJson(Http.performGet(new URL("https://olauncherstatus.onrender.com/status?service=sessionserver.mojang.com"), AuthErrorForm.this.popup.getMinecraftLauncher().getLauncher().getProxy()), var1.getType());
+-                    if (var2.get("sessionserver.mojang.com") == AuthErrorForm.ServerStatus.RED) {
+-                        AuthErrorForm.this.displayError((Throwable)null, "It looks like our servers are down right now. Sorry!", "We're already working on the problem and will have it fixed soon.", "Please try again later!");
+-                    }
+-                } catch (Exception var3) {
+-                }
+-
+-            }
+-        });
+-    }
+-
+-    public static enum ServerStatus {
+-        GREEN("Online, no problems detected."),
+-        YELLOW("May be experiencing issues."),
+-        RED("Offline, experiencing problems.");
+-
+-        private final String title;
+-
+-        private ServerStatus(String var3) {
+-            this.title = var3;
+-        }
+-    }
+ }
+diff --git a/src/main/java/net/minecraft/launcher/ui/popups/login/LogInForm.java b/src/main/java/net/minecraft/launcher/ui/popups/login/LogInForm.java
+index b8c028a..1e95f08 100644
+--- a/src/main/java/net/minecraft/launcher/ui/popups/login/LogInForm.java
++++ b/src/main/java/net/minecraft/launcher/ui/popups/login/LogInForm.java
+@@ -1,48 +1,33 @@
+ package net.minecraft.launcher.ui.popups.login;
+ 
+ import com.mojang.authlib.Agent;
+-import com.mojang.authlib.GameProfile;
+ import com.mojang.authlib.UserAuthentication;
+ import com.mojang.authlib.exceptions.AuthenticationException;
+ import com.mojang.authlib.exceptions.InvalidCredentialsException;
+-import com.mojang.authlib.exceptions.UserMigratedException;
+-import com.mojang.launcher.OperatingSystem;
+ import com.mojang.util.UUIDTypeAdapter;
+-import java.awt.Cursor;
+-import java.awt.Font;
+ import java.awt.GridBagConstraints;
+ import java.awt.GridBagLayout;
+-import java.awt.event.ActionEvent;
+-import java.awt.event.ActionListener;
+-import java.awt.event.MouseAdapter;
+-import java.awt.event.MouseEvent;
+-import javax.swing.*;
++import javax.swing.Box;
++import javax.swing.JOptionPane;
++import javax.swing.JPanel;
++import javax.swing.SwingUtilities;
+ 
+ import dev.figboot.olauncher.auth.MSLoginServer;
+ import dev.figboot.olauncher.auth.MicrosoftUserAuthentication;
+ import dev.figboot.olauncher.auth.ui.DeviceCodeDialog;
+ import dev.figboot.olauncher.auth.ui.MSLoginDialog;
+-import net.minecraft.launcher.LauncherConstants;
+ import net.minecraft.launcher.profile.AuthenticationDatabase;
+-import org.apache.commons.lang3.ArrayUtils;
+-import org.apache.commons.lang3.StringUtils;
+ import org.apache.logging.log4j.LogManager;
+ import org.apache.logging.log4j.Logger;
+ 
+-public class LogInForm extends JPanel implements ActionListener {
++public class LogInForm extends JPanel {
+     private static final Logger LOGGER = LogManager.getLogger();
+     private final LogInPopup popup;
+-    private final JTextField usernameField = new JTextField();
+-    private final JPasswordField passwordField = new JPasswordField();
+-    private final JComboBox userDropdown = new JComboBox();
+-    private final JPanel userDropdownPanel = new JPanel();
+     private final UserAuthentication authentication;
+ 
+     public LogInForm(LogInPopup var1) {
+         this.popup = var1;
+         this.authentication = var1.getMinecraftLauncher().getProfileManager().getAuthDatabase().getAuthenticationService().createUserAuthentication(Agent.MINECRAFT);
+-        this.usernameField.addActionListener(this);
+-        this.passwordField.addActionListener(this);
+         this.createInterface();
+     }
+ 
+@@ -54,170 +39,42 @@ public class LogInForm extends JPanel implements ActionListener {
+         var1.gridy = -1;
+         var1.weightx = 1.0D;
+         this.add(Box.createGlue());
+-        Font var3 = getFont().deriveFont(1);
+-        /*
+-        JLabel var2 = new JLabel("Email Address or Username:");
+-        Font var4 = var2.getFont().deriveFont((float)var3.getSize() - 2.0F);
+-        var2.setFont(var3);
+-        this.add(var2, var1);
+-        this.add(this.usernameField, var1);
+-        JLabel var5 = new JLabel("(Which do I use?)");
+-        var5.setCursor(new Cursor(12));
+-        var5.setFont(var4);
+-        var5.setHorizontalAlignment(4);
+-        var5.addMouseListener(new MouseAdapter() {
+-            public void mouseClicked(MouseEvent var1) {
+-                OperatingSystem.openLink(LauncherConstants.URL_FORGOT_USERNAME);
+-            }
+-        });
+-        this.add(var5, var1);
+         this.add(Box.createVerticalStrut(10), var1);
+-        JLabel var6 = new JLabel("Password:");
+-        var6.setFont(var3);
+-        this.add(var6, var1);
+-        this.add(this.passwordField, var1);
+-        JLabel var7 = new JLabel("(Forgot Password?)");
+-        var7.setCursor(new Cursor(12));
+-        var7.setFont(var4);
+-        var7.setHorizontalAlignment(4);
+-        var7.addMouseListener(new MouseAdapter() {
+-            public void mouseClicked(MouseEvent var1) {
+-                OperatingSystem.openLink(LauncherConstants.URL_FORGOT_PASSWORD_MINECRAFT);
+-            }
+-        });
+-        this.add(var7, var1);
+-         */
+-        this.createUserDropdownPanel(var3);
+-        this.add(this.userDropdownPanel, var1);
+-        this.add(Box.createVerticalStrut(10), var1);
+-    }
+-
+-    protected void createUserDropdownPanel(Font var1) {
+-        this.userDropdownPanel.setLayout(new GridBagLayout());
+-        GridBagConstraints var2 = new GridBagConstraints();
+-        var2.fill = 2;
+-        var2.gridx = 0;
+-        var2.gridy = -1;
+-        var2.weightx = 1.0D;
+-        this.userDropdownPanel.add(Box.createVerticalStrut(8), var2);
+-        JLabel var3 = new JLabel("Character Name:");
+-        var3.setFont(var1);
+-        this.userDropdownPanel.add(var3, var2);
+-        this.userDropdownPanel.add(this.userDropdown, var2);
+-        this.userDropdownPanel.setVisible(false);
+-    }
+-
+-    public void actionPerformed(ActionEvent var1) {
+-        if (var1.getSource() == this.usernameField || var1.getSource() == this.passwordField) {
+-            this.tryLogIn();
+-        }
+-
+     }
+ 
+     public void tryLogIn() {
+-        if (this.authentication.isLoggedIn() && this.authentication.getSelectedProfile() == null && ArrayUtils.isNotEmpty(this.authentication.getAvailableProfiles())) {
+-            this.popup.setCanLogIn(false);
+-            GameProfile var6 = null; // olauncher - move final declaration...
+-            GameProfile[] var2 = this.authentication.getAvailableProfiles();
+-            int var3 = var2.length;
+-
+-            for(int var4 = 0; var4 < var3; ++var4) {
+-                GameProfile var5 = var2[var4];
+-                if (var5.getName().equals(this.userDropdown.getSelectedItem())) {
+-                    var6 = var5;
+-                    break;
+-                }
+-            }
+-
+-            if (var6 == null) {
+-                var6 = this.authentication.getAvailableProfiles()[0];
+-            }
+-
+-            final GameProfile var6Final = var6; // olauncher - ...here
+-            this.popup.getMinecraftLauncher().getLauncher().getVersionManager().getExecutorService().execute(new Runnable() {
+-                public void run() {
+-                    try {
+-                        LogInForm.this.authentication.selectGameProfile(var6Final);
+-                        LogInForm.this.popup.getMinecraftLauncher().getProfileManager().getAuthDatabase().register(UUIDTypeAdapter.fromUUID(LogInForm.this.authentication.getSelectedProfile().getId()), LogInForm.this.authentication);
++        this.popup.setCanLogIn(false);
++        this.authentication.logOut();
++        this.popup.getMinecraftLauncher().getLauncher().getVersionManager().getExecutorService().execute(new Runnable() {
++            public void run() {
++                try {
++                    LogInForm.this.authentication.logIn();
++                    AuthenticationDatabase var1x = LogInForm.this.popup.getMinecraftLauncher().getProfileManager().getAuthDatabase();
++                    if (LogInForm.this.authentication.getSelectedProfile() == null) {
++                        String var9 = "demo-" + LogInForm.this.authentication.getUserID();
++                        var1x.register(var9, LogInForm.this.authentication);
++                        LogInForm.this.popup.setLoggedIn(var9);
++                    } else {
++                        var1x.register(UUIDTypeAdapter.fromUUID(LogInForm.this.authentication.getSelectedProfile().getId()), LogInForm.this.authentication);
+                         LogInForm.this.popup.setLoggedIn(UUIDTypeAdapter.fromUUID(LogInForm.this.authentication.getSelectedProfile().getId()));
+-                    } catch (InvalidCredentialsException var2) {
+-                        LogInForm.LOGGER.error("Couldn't log in", var2);
+-                        LogInForm.this.popup.getErrorForm().displayError(var2, "Sorry, but we couldn't log you in right now.", "Please try again later.");
+-                        LogInForm.this.popup.setCanLogIn(true);
+-                    } catch (AuthenticationException var3) {
+-                        LogInForm.LOGGER.error("Couldn't log in", var3);
+-                        LogInForm.this.popup.getErrorForm().displayError(var3, "Sorry, but we couldn't connect to our servers.", "Please make sure that you are online and that Minecraft is not blocked.");
+-                        LogInForm.this.popup.setCanLogIn(true);
+                     }
+-
++                } catch (InvalidCredentialsException var7) {
++                    LogInForm.LOGGER.error("Couldn't log in", var7);
++                    LogInForm.this.popup.getErrorForm().displayError(var7, "Sorry, but we couldn't log you in right now.", "Please try again later.");
++                    LogInForm.this.popup.setCanLogIn(true);
++                } catch (AuthenticationException var8) {
++                    LogInForm.LOGGER.error("Couldn't log in", var8);
++                    LogInForm.this.popup.getErrorForm().displayError(var8, "Sorry, but we couldn't connect to our servers.", "Please make sure that you are online and that Minecraft is not blocked.");
++                    LogInForm.this.popup.setCanLogIn(true);
++                } catch (Throwable t) {
++                    LogInForm.LOGGER.error("Couldn't log in", t);
++                    LogInForm.this.popup.getErrorForm().displayError(t, "Sorry, but an unknown error occurred while logging in.", "Please report this issue to the developers.");
++                    LogInForm.this.popup.setCanLogIn(true);
+                 }
+-            });
+-        } else {
+-            this.popup.setCanLogIn(false);
+-            this.authentication.logOut();
+-            this.authentication.setUsername(this.usernameField.getText());
+-            this.authentication.setPassword(String.valueOf(this.passwordField.getPassword()));
+-            final int var1 = this.passwordField.getPassword().length;
+-            this.passwordField.setText("");
+-            this.popup.getMinecraftLauncher().getLauncher().getVersionManager().getExecutorService().execute(new Runnable() {
+-                public void run() {
+-                    try {
+-                        LogInForm.this.authentication.logIn();
+-                        AuthenticationDatabase var1x = LogInForm.this.popup.getMinecraftLauncher().getProfileManager().getAuthDatabase();
+-                        if (LogInForm.this.authentication.getSelectedProfile() == null) {
+-                            if (ArrayUtils.isNotEmpty(LogInForm.this.authentication.getAvailableProfiles())) {
+-                                GameProfile[] var2 = LogInForm.this.authentication.getAvailableProfiles();
+-                                int var3 = var2.length;
+-
+-                                for(int var4 = 0; var4 < var3; ++var4) {
+-                                    GameProfile var5 = var2[var4];
+-                                    LogInForm.this.userDropdown.addItem(var5.getName());
+-                                }
+-
+-                                SwingUtilities.invokeLater(new Runnable() {
+-                                    public void run() {
+-                                        LogInForm.this.usernameField.setEditable(false);
+-                                        LogInForm.this.passwordField.setEditable(false);
+-                                        LogInForm.this.userDropdownPanel.setVisible(true);
+-                                        LogInForm.this.popup.repack();
+-                                        LogInForm.this.popup.setCanLogIn(true);
+-                                        LogInForm.this.passwordField.setText(StringUtils.repeat('*', var1));
+-                                    }
+-                                });
+-                            } else {
+-                                String var9 = "demo-" + LogInForm.this.authentication.getUserID();
+-                                var1x.register(var9, LogInForm.this.authentication);
+-                                LogInForm.this.popup.setLoggedIn(var9);
+-                            }
+-                        } else {
+-                            var1x.register(UUIDTypeAdapter.fromUUID(LogInForm.this.authentication.getSelectedProfile().getId()), LogInForm.this.authentication);
+-                            LogInForm.this.popup.setLoggedIn(UUIDTypeAdapter.fromUUID(LogInForm.this.authentication.getSelectedProfile().getId()));
+-                        }
+-                    } catch (UserMigratedException var6) {
+-                        LogInForm.LOGGER.error("Couldn't log in", var6);
+-                        LogInForm.this.popup.getErrorForm().displayError(var6, "Sorry, but we can't log you in with your username.", "You have migrated your account, please use your email address.");
+-                        LogInForm.this.popup.setCanLogIn(true);
+-                    } catch (InvalidCredentialsException var7) {
+-                        LogInForm.LOGGER.error("Couldn't log in", var7);
+-                        LogInForm.this.popup.getErrorForm().displayError(var7, "Sorry, but your username or password is incorrect!", "Please try again. If you need help, try the 'Forgot Password' link.");
+-                        LogInForm.this.popup.setCanLogIn(true);
+-                    } catch (AuthenticationException var8) {
+-                        LogInForm.LOGGER.error("Couldn't log in", var8);
+-                        LogInForm.this.popup.getErrorForm().displayError(var8, "Sorry, but we couldn't connect to our servers.", "Please make sure that you are online and that Minecraft is not blocked.");
+-                        LogInForm.this.popup.setCanLogIn(true);
+-                    } catch (Throwable t) {
+-                        LogInForm.LOGGER.error("Couldn't log in", t);
+-                        LogInForm.this.popup.getErrorForm().displayError(t, "Sorry, but an unknown error occurred while logging in.", "Please report this issue to the developers.");
+-                        LogInForm.this.popup.setCanLogIn(true);
+-                    }
+-
+-                }
+-            });
+-        }
+-
++            }
++        });
+     }
+ 
+-    // olauncher - add and handle login button
+     public void openMSLogin() {
+         SwingUtilities.invokeLater(() -> {
+             new MSLoginDialog(this::handleMSLogin);
+diff --git a/src/main/java/net/minecraft/launcher/ui/popups/profile/ProfileInfoPanel.java b/src/main/java/net/minecraft/launcher/ui/popups/profile/ProfileInfoPanel.java
+index 0a8ca95..ca20d17 100644
+--- a/src/main/java/net/minecraft/launcher/ui/popups/profile/ProfileInfoPanel.java
++++ b/src/main/java/net/minecraft/launcher/ui/popups/profile/ProfileInfoPanel.java
+@@ -27,7 +27,6 @@ public class ProfileInfoPanel extends JPanel {
+     private final JCheckBox resolutionCustom = new JCheckBox("Resolution:");
+     private final JTextField resolutionWidth = new JTextField();
+     private final JTextField resolutionHeight = new JTextField();
+-//    private final JCheckBox useHopper = new JCheckBox("Automatically ask Mojang for assistance with fixing crashes");
+     private final JCheckBox launcherVisibilityCustom = new JCheckBox("Launcher Visibility:");
+     private final JComboBox launcherVisibilityOption = new JComboBox();
+ 
+@@ -73,11 +72,6 @@ public class ProfileInfoPanel extends JPanel {
+         var1.weightx = 0.0D;
+         var1.fill = 0;
+         ++var1.gridy;
+-        var1.fill = 2;
+-        var1.weightx = 1.0D;
+-        var1.gridwidth = 0;
+-//        this.add(this.useHopper, var1);
+-        var1.gridwidth = 1;
+         var1.weightx = 0.0D;
+         var1.fill = 0;
+         ++var1.gridy;
+@@ -119,7 +113,6 @@ public class ProfileInfoPanel extends JPanel {
+         this.resolutionWidth.setText(String.valueOf(var2.getWidth()));
+         this.resolutionHeight.setText(String.valueOf(var2.getHeight()));
+         this.updateResolutionState();
+-//        this.useHopper.setSelected(this.editor.getProfile().getUseHopperCrashService());
+         LauncherVisibilityRule var3 = this.editor.getProfile().getLauncherVisibilityOnGameClose();
+         if (var3 != null) {
+             this.launcherVisibilityCustom.setSelected(true);
+@@ -184,11 +177,6 @@ public class ProfileInfoPanel extends JPanel {
+         };
+         this.resolutionWidth.getDocument().addDocumentListener(var1);
+         this.resolutionHeight.getDocument().addDocumentListener(var1);
+-//        this.useHopper.addItemListener(new ItemListener() {
+-//            public void itemStateChanged(ItemEvent var1) {
+-//                ProfileInfoPanel.this.updateHopper();
+-//            }
+-//        });
+         this.launcherVisibilityCustom.addItemListener(new ItemListener() {
+             public void itemStateChanged(ItemEvent var1) {
+                 ProfileInfoPanel.this.updateLauncherVisibilityState();
+@@ -221,16 +209,6 @@ public class ProfileInfoPanel extends JPanel {
+ 
+     }
+ 
+-    private void updateHopper() {
+-        Profile var1 = this.editor.getProfile();
+-//        if (this.useHopper.isSelected()) {
+-//            var1.setUseHopperCrashService(true);
+-//        } else {
+-//            var1.setUseHopperCrashService(false);
+-//        }
+-        var1.setUseHopperCrashService(false);
+-    }
+-
+     private void updateProfileName() {
+         if (this.profileName.getText().length() > 0) {
+             this.editor.getProfile().setName(this.profileName.getText());
+diff --git a/src/main/java/net/minecraft/launcher/ui/tabs/CrashReportTab.java b/src/main/java/net/minecraft/launcher/ui/tabs/CrashReportTab.java
+index b6c4444..ac9f39e 100644
+--- a/src/main/java/net/minecraft/launcher/ui/tabs/CrashReportTab.java
++++ b/src/main/java/net/minecraft/launcher/ui/tabs/CrashReportTab.java
+@@ -1,6 +1,5 @@
+ package net.minecraft.launcher.ui.tabs;
+ 
+-import com.mojang.launcher.Http;
+ import com.mojang.launcher.OperatingSystem;
+ import com.mojang.launcher.versions.CompleteVersion;
+ import java.awt.BorderLayout;
+@@ -10,127 +9,49 @@ import java.awt.Insets;
+ import java.awt.event.ActionEvent;
+ import java.awt.event.ActionListener;
+ import java.io.File;
+-import java.io.IOException;
+-import java.net.URI;
+-import java.net.URISyntaxException;
+-import java.util.HashMap;
+-import javax.swing.Icon;
+ import javax.swing.JButton;
+ import javax.swing.JEditorPane;
+ import javax.swing.JLabel;
+-import javax.swing.JOptionPane;
+ import javax.swing.JPanel;
+ import javax.swing.JScrollPane;
+-import net.minecraft.hopper.HopperService;
+-import net.minecraft.hopper.PublishResponse;
+-import net.minecraft.hopper.SubmitResponse;
+ import net.minecraft.launcher.Launcher;
+-import net.minecraft.launcher.LauncherConstants;
+ import org.apache.logging.log4j.LogManager;
+ import org.apache.logging.log4j.Logger;
+ 
+ public class CrashReportTab extends JPanel {
+     private static final Logger LOGGER = LogManager.getLogger();
+-    private final Launcher minecraftLauncher;
+-    private final CompleteVersion version;
+     private final File reportFile;
+-    private final String report;
+     private final JEditorPane reportEditor = new JEditorPane();
+     private final JScrollPane scrollPane;
+     private final CrashReportTab.CrashInfoPane crashInfoPane;
+     private final boolean isModded;
+-    private SubmitResponse hopperServiceResponse;
+ 
+-    public CrashReportTab(final Launcher var1, final CompleteVersion var2, File var3, final String var4) {
++    public CrashReportTab(Launcher var1, CompleteVersion var2, File var3, String var4) {
+         super(true);
+         this.scrollPane = new JScrollPane(this.reportEditor);
+-        this.hopperServiceResponse = null;
+-        this.minecraftLauncher = var1;
+-        this.version = var2;
+         this.reportFile = var3;
+-        this.report = var4;
+-        this.crashInfoPane = new CrashReportTab.CrashInfoPane(var1);
++        this.crashInfoPane = new CrashReportTab.CrashInfoPane();
+         this.isModded = !var4.contains("Is Modded: Probably not") && !var4.contains("Is Modded: Unknown");
+         this.setLayout(new BorderLayout());
+-        this.createInterface();
+-//        if (var1.getProfileManager().getSelectedProfile().getUseHopperCrashService()) {
+-//            var1.getLauncher().getVersionManager().getExecutorService().submit(new Runnable() {
+-//                public void run() {
+-//                    try {
+-//                        HashMap var1x = new HashMap();
+-//                        var1x.put("launcher.version", LauncherConstants.getVersionName());
+-//                        var1x.put("launcher.title", var1.getUserInterface().getTitle());
+-//                        var1x.put("bootstrap.version", String.valueOf(var1.getBootstrapVersion()));
+-//                        CrashReportTab.this.hopperServiceResponse = HopperService.submitReport(var1.getLauncher().getProxy(), var4, "Minecraft", var2.getId(), var1x);
+-//                        CrashReportTab.LOGGER.info("Reported crash to Mojang (ID " + CrashReportTab.this.hopperServiceResponse.getReport().getId() + ")");
+-//                        if (CrashReportTab.this.hopperServiceResponse.getProblem() != null) {
+-//                            CrashReportTab.this.showKnownProblemPopup();
+-//                        }
+-//                        else if (CrashReportTab.this.hopperServiceResponse.getReport().canBePublished()) {
+-//                            CrashReportTab.this.showPublishReportPrompt();
+-//                        }
+-//                    } catch (IOException var2x) {
+-//                        CrashReportTab.LOGGER.error("Couldn't report crash to Mojang", var2x);
+-//                    }
+-//
+-//                }
+-//            });
+-//        }
+-
++        this.createInterface(var4);
+     }
+ 
+-//    private void showPublishReportPrompt() {
+-//        String[] var1 = new String[]{"Publish Crash Report", "Cancel"};
+-//        JLabel var2 = new JLabel();
+-//        var2.setText("<html><p>Sorry, but it looks like the game crashed and we don't know why.</p><p>Would you mind publishing this report so that " + (this.isModded ? "the mod authors" : "Mojang") + " can fix it?</p></html>");
+-//        int var3 = JOptionPane.showOptionDialog(this, var2, "Uhoh, something went wrong!", 0, 1, (Icon)null, var1, var1[0]);
+-//        if (var3 == 0) {
+-//            try {
+-//                PublishResponse var4 = HopperService.publishReport(this.minecraftLauncher.getLauncher().getProxy(), this.hopperServiceResponse.getReport());
+-//            } catch (IOException var5) {
+-//                LOGGER.error("Couldn't publish report " + this.hopperServiceResponse.getReport().getId(), var5);
+-//            }
+-//        }
+-//
+-//    }
+-
+-    private void showKnownProblemPopup() {
+-        if (this.hopperServiceResponse.getProblem().getUrl() == null) {
+-            JOptionPane.showMessageDialog(this, this.hopperServiceResponse.getProblem().getDescription(), this.hopperServiceResponse.getProblem().getTitle(), 1);
+-        } else {
+-            String[] var1 = new String[]{"Fix The Problem", "Cancel"};
+-            int var2 = JOptionPane.showOptionDialog(this, this.hopperServiceResponse.getProblem().getDescription(), this.hopperServiceResponse.getProblem().getTitle(), 0, 1, (Icon)null, var1, var1[0]);
+-            if (var2 == 0) {
+-                try {
+-                    OperatingSystem.openLink(new URI(this.hopperServiceResponse.getProblem().getUrl()));
+-                } catch (URISyntaxException var4) {
+-                    LOGGER.error("Couldn't open help page ( " + this.hopperServiceResponse.getProblem().getUrl() + "  ) for crash", var4);
+-                }
+-            }
+-        }
+-
+-    }
+-
+-    protected void createInterface() {
++    protected void createInterface(String report) {
+         this.add(this.crashInfoPane, "North");
+         this.add(this.scrollPane, "Center");
+-        this.reportEditor.setText(this.report);
++        this.reportEditor.setText(report);
+         this.crashInfoPane.createInterface();
+     }
+ 
+     private class CrashInfoPane extends JPanel implements ActionListener {
+-        public static final String INFO_NORMAL = "<html><div style='width: 100%'><p><b>Uhoh, it looks like the game has crashed! Sorry for the inconvenience :(</b></p><p>Using magic and love, we've managed to gather some details about the crash and we will investigate this as soon as we can.</p><p>You can see the full report below.</p></div></html>";
+-        public static final String INFO_MODDED = "<html><div style='width: 100%'><p><b>Uhoh, it looks like the game has crashed! Sorry for the inconvenience :(</b></p><p>We think your game may be modded, and as such we can't accept this crash report.</p><p>However, if you do indeed use mods, please send this to the mod authors to take a look at!</p></div></html>";
+-//        private final JButton submitButton = new JButton("Report to Mojang");
++        private static final String INFO_NORMAL = "<html><div style='width: 100%'><p><b>Uhoh, it looks like the game has crashed! Sorry for the inconvenience :(</b></p><p>Using magic and love, we've managed to gather some details about the crash and we will investigate this as soon as we can.</p><p>You can see the full report below.</p></div></html>";
++        private static final String INFO_MODDED = "<html><div style='width: 100%'><p><b>Uhoh, it looks like the game has crashed! Sorry for the inconvenience :(</b></p><p>We think your game may be modded, and as such we can't accept this crash report.</p><p>However, if you do indeed use mods, please send this to the mod authors to take a look at!</p></div></html>";
+         private final JButton openFileButton = new JButton("Open report file");
+ 
+-        // olauncher - remove submit report
+-        protected CrashInfoPane(Launcher var2) {
+-//            this.submitButton.addActionListener(this);
++        protected CrashInfoPane() {
+             this.openFileButton.addActionListener(this);
+         }
+ 
+-        // olauncher - remove submit report
+         protected void createInterface() {
+             this.setLayout(new GridBagLayout());
+             GridBagConstraints var1 = new GridBagConstraints();
+@@ -138,7 +59,6 @@ public class CrashReportTab extends JPanel {
+             var1.fill = 2;
+             var1.insets = new Insets(2, 2, 2, 2);
+             var1.gridx = 1;
+-//            this.add(this.submitButton, var1);
+             var1.gridy = 1;
+             this.add(this.openFileButton, var1);
+             var1.gridx = 0;
+@@ -146,63 +66,13 @@ public class CrashReportTab extends JPanel {
+             var1.weightx = 1.0D;
+             var1.weighty = 1.0D;
+             var1.gridheight = 2;
+-            this.add(new JLabel(CrashReportTab.this.isModded ? "<html><div style='width: 100%'><p><b>Uhoh, it looks like the game has crashed! Sorry for the inconvenience :(</b></p><p>We think your game may be modded, and as such we can't accept this crash report.</p><p>However, if you do indeed use mods, please send this to the mod authors to take a look at!</p></div></html>" : "<html><div style='width: 100%'><p><b>Uhoh, it looks like the game has crashed! Sorry for the inconvenience :(</b></p><p>Using magic and love, we've managed to gather some details about the crash and we will investigate this as soon as we can.</p><p>You can see the full report below.</p></div></html>"), var1);
+-//            if (CrashReportTab.this.isModded) {
+-//                this.submitButton.setEnabled(false);
+-//            }
+-
++            this.add(new JLabel(CrashReportTab.this.isModded ? INFO_MODDED : INFO_NORMAL), var1);
+         }
+ 
+-        // olauncher - remove submit report
+         public void actionPerformed(ActionEvent var1) {
+-//            if (var1.getSource() == this.submitButton) {
+-//                if (CrashReportTab.this.hopperServiceResponse != null) {
+-//                    if (CrashReportTab.this.hopperServiceResponse.getProblem() != null) {
+-//                        CrashReportTab.this.showKnownProblemPopup();
+-//                    } else if (CrashReportTab.this.hopperServiceResponse.getReport().canBePublished()) {
+-//                        CrashReportTab.this.showPublishReportPrompt();
+-//                    }
+-//                } else {
+-//                    try {
+-//                        HashMap var2 = new HashMap();
+-//                        var2.put("pid", 10400);
+-//                        var2.put("issuetype", 1);
+-//                        var2.put("description", "Put the summary of the bug you're having here\n\n*What I expected to happen was...:*\nDescribe what you thought should happen here\n\n*What actually happened was...:*\nDescribe what happened here\n\n*Steps to Reproduce:*\n1. Put a step by step guide on how to trigger the bug here\n2. ...\n3. ...");
+-//                        var2.put("environment", this.buildEnvironmentInfo());
+-//                        OperatingSystem.openLink(URI.create("https://bugs.mojang.com/secure/CreateIssueDetails!init.jspa?" + Http.buildQuery(var2)));
+-//                    } catch (Throwable var3) {
+-//                        CrashReportTab.LOGGER.error("Couldn't open bugtracker", var3);
+-//                    }
+-//                }
+-//            }
+             if (var1.getSource() == this.openFileButton) {
+                 OperatingSystem.openLink(CrashReportTab.this.reportFile.toURI());
+             }
+-
+-        }
+-
+-        private String buildEnvironmentInfo() {
+-            StringBuilder var1 = new StringBuilder();
+-            var1.append("OS: ");
+-            var1.append(System.getProperty("os.name"));
+-            var1.append(" (ver ");
+-            var1.append(System.getProperty("os.version"));
+-            var1.append(", arch ");
+-            var1.append(System.getProperty("os.arch"));
+-            var1.append(")\nJava: ");
+-            var1.append(System.getProperty("java.version"));
+-            var1.append(" (by ");
+-            var1.append(System.getProperty("java.vendor"));
+-            var1.append(")\nLauncher: ");
+-            var1.append(CrashReportTab.this.minecraftLauncher.getUserInterface().getTitle());
+-            var1.append(" (bootstrap ");
+-            var1.append(CrashReportTab.this.minecraftLauncher.getBootstrapVersion());
+-            var1.append(")\nMinecraft: ");
+-            var1.append(CrashReportTab.this.version.getId());
+-            var1.append(" (updated ");
+-            var1.append(CrashReportTab.this.version.getUpdatedTime());
+-            var1.append(")");
+-            return var1.toString();
+         }
+     }
+ }
+-- 
+2.53.0.windows.1
+
