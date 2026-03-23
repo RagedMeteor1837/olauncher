@@ -5,7 +5,7 @@ The old launcher we all know and love with the QoL features of the new launcher.
 This project is maintained on a best-effort basis and updates will only be made when I have the time.
 
 ## How to use
-1. Go to the [latest release](https://github.com/RagedMeteor1837/OLauncher/releases/latest)
+1. Go to the [latest release](https://github.com/RagedMeteor1837/olauncher/releases/latest)
 2. Download the `olauncher-xxx-redist.jar` file
 3. Run it
 
@@ -17,13 +17,13 @@ This project is maintained on a best-effort basis and updates will only be made 
   - You can still provide your own JVMs
 - Update checking
 - Displays latest release notes
-~~- Displays Mojang server status~~
+- ~~Displays Mojang server status~~
 
 ## Build from source
 **1. Clone the repository**
    ```bash
-   git clone https://github.com/RagedMeteor1837/OLauncher.git
-   cd OLauncher
+   git clone https://github.com/RagedMeteor1837/olauncher.git
+   cd olauncher
    git submodule update --init
   ```
 **2. Run the build scripts<br>**
