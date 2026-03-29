@@ -1,23 +1,100 @@
-From c725d321debf5b935096e10912ed61b27986f63f Mon Sep 17 00:00:00 2001
+From 4a88c9e9a4b62734d567a7226e152e67226fc298 Mon Sep 17 00:00:00 2001
 From: RagedMeteor1837 <148640131+RagedMeteor1837@users.noreply.github.com>
 Date: Sun, 29 Mar 2026 20:34:46 +0100
 Subject: [PATCH] Update channels & checking changes
 
 
+diff --git a/pom.xml b/pom.xml
+index 13ad9bd..cb29589 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -112,13 +112,15 @@
+                             <generateGitPropertiesFilename>${project.build.outputDirectory}/ver/git-outer.properties</generateGitPropertiesFilename>
+                             <dotGitDirectory>../.git</dotGitDirectory>
+                             <gitDescribe>
+-                                <tags>true</tags> <!-- include unannotated tags (occurs during shallow clones) -->
++                                <tags>true</tags> 
++                                <match>v*</match> 
+                             </gitDescribe>
+                             <includeOnlyProperties>
+                                 <property>^git.closest.tag.name$</property>
+                                 <property>^git.closest.tag.commit.count$</property>
+                                 <property>^git.dirty$</property>
+                                 <property>^git.commit.id.abbrev$</property>
++                                <property>^git.commit.id$</property>
+                             </includeOnlyProperties>
+                         </configuration>
+                     </execution>
+diff --git a/src/main/java/dev/figboot/olauncher/launcher/LauncherVersion.java b/src/main/java/dev/figboot/olauncher/launcher/LauncherVersion.java
+index 5e73013..6efa8f4 100644
+--- a/src/main/java/dev/figboot/olauncher/launcher/LauncherVersion.java
++++ b/src/main/java/dev/figboot/olauncher/launcher/LauncherVersion.java
+@@ -39,7 +39,7 @@ public final class LauncherVersion {
+         return new LauncherVersion(innerProps, outerProps);
+     }
+ 
+-    @Getter private final String tag, commitId;
++    @Getter private final String tag, commitId, fullCommitId;
+     private final String tagSan;
+     @Getter private final boolean dirty, devVersion;
+ 
+@@ -58,6 +58,7 @@ public final class LauncherVersion {
+                 || outer.getProperty("git.dirty").equalsIgnoreCase("true");
+ 
+         commitId = outer.getProperty("git.commit.id.abbrev");
++        fullCommitId = outer.getProperty("git.commit.id");
+     }
+ 
+     private LauncherVersion() {
+@@ -66,6 +67,7 @@ public final class LauncherVersion {
+         devVersion = true;
+         dirty = false;
+         commitId = "???";
++        fullCommitId = null;
+     }
+ 
+     @Override
+@@ -73,19 +75,14 @@ public final class LauncherVersion {
+         if (toStringCache != null) return toStringCache;
+ 
+         StringBuilder sb = new StringBuilder();
+-        sb.append(tagSan);
+-
+-        if (devVersion) {
+-            sb.append("-dev");
+-        }
+ 
+         if (devVersion || dirty) {
+-            sb.append("-");
+-            sb.append(commitId);
+-        }
+-
+-        if (dirty) {
+-            sb.append("-dirty");
++            if (devVersion) sb.append("dev");
++            else sb.append("dirty");
++            sb.append("-").append(commitId);
++            if (devVersion && dirty) sb.append("-dirty");
++        } else {
++            sb.append(tagSan);
+         }
+ 
+         return toStringCache = sb.toString();
 diff --git a/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateChecker.java b/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateChecker.java
-index 7541190..653f7bc 100644
+index 7541190..b83423c 100644
 --- a/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateChecker.java
 +++ b/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateChecker.java
-@@ -21,6 +21,8 @@ import java.nio.file.Path;
+@@ -21,14 +21,15 @@ import java.nio.file.Path;
  import java.time.Instant;
  import java.time.temporal.ChronoUnit;
  import java.time.temporal.TemporalUnit;
+-import java.util.LinkedList;
+-import java.util.List;
 +import java.util.Arrays;
 +import java.util.Comparator;
- import java.util.LinkedList;
- import java.util.List;
  
-@@ -29,6 +31,7 @@ public class LauncherUpdateChecker {
+ public class LauncherUpdateChecker {
+     private static final Logger LOGGER = LogManager.getLogger();
      private static final String INFO_FILE_NAME = "olauncher_update.json";
  
      private static final URL GITHUB_LATEST_RELEASE_URL = constantURL("https://api.github.com/repos/RagedMeteor1837/olauncher/releases/latest");
@@ -25,40 +102,34 @@ index 7541190..653f7bc 100644
  
      private static final long UPDATE_CHECK_FREQ = 3;
      private static final TemporalUnit UPDATE_CHECK_FREQ_UNIT = ChronoUnit.HOURS;
-@@ -36,6 +39,8 @@ public class LauncherUpdateChecker {
-     private final Gson gson;
-     private LauncherUpdateInfo info;
- 
-+    private boolean channelSwitchPending = false;
-+
-     public LauncherUpdateChecker() {
-         gson = new GsonBuilder()
-                 .registerTypeAdapter(Instant.class, new InstantTypeAdapter())
-@@ -47,6 +52,10 @@ public class LauncherUpdateChecker {
+@@ -45,8 +46,15 @@ public class LauncherUpdateChecker {
+     public void loadInfo() throws IOException {
+         Path workDir = Launcher.getCurrentInstance().getLauncher().getWorkingDirectory().toPath();
          Path infoFile = workDir.resolve(INFO_FILE_NAME);
++
++        boolean currentlyDev = LauncherVersion.getInstance().isDevVersion()
++                             || LauncherVersion.getInstance().isDirty();
++        UpdateChannel buildChannel = currentlyDev ? UpdateChannel.DEV : UpdateChannel.STABLE;
++
          if (!Files.isRegularFile(infoFile)) {
              info = LauncherUpdateInfo.defaults();
-+            if (LauncherVersion.getInstance().isDevVersion()) {
-+                LOGGER.info("Dev build detected on first run — defaulting to DEV update channel.");
-+                info.setChannel(UpdateChannel.DEV);
-+            }
++            info.setChannel(buildChannel);
++            info.setDevBuild(currentlyDev);
              saveInfo();
              return;
          }
-@@ -54,6 +63,20 @@ public class LauncherUpdateChecker {
+@@ -54,6 +62,18 @@ public class LauncherUpdateChecker {
          try (Reader r = Files.newBufferedReader(infoFile)) {
              info = gson.fromJson(r, LauncherUpdateInfo.class);
          }
 +
-+        // Migrate existing installs that pre-date the channel field.
-+        if (info.getChannel() == null) {
-+            info.setChannel(LauncherVersion.getInstance().isDevVersion() ? UpdateChannel.DEV : UpdateChannel.STABLE);
-+        }
-+
-+        // If a dev build is launched against a stable-channel config, switch to DEV.
-+        if (LauncherVersion.getInstance().isDevVersion() && info.getChannel() == UpdateChannel.STABLE) {
-+            LOGGER.info("Dev build launched with stable channel config — switching to DEV update channel.");
-+            info.setChannel(UpdateChannel.DEV);
++        // Auto-switch when the build type changes (e.g. stable build installed over dev, or vice versa).
++        // User manual channel changes do not update devBuild, so their preference persists as long as the same build type is running.
++        if (info.getChannel() == null || currentlyDev != info.isDevBuild()) {
++            LOGGER.info("Build type {}, switching update channel to {}.",
++                    new Object[]{info.getChannel() == null ? "unknown (migration)" : "changed", buildChannel});
++            info.setChannel(buildChannel);
++            info.setDevBuild(currentlyDev);
 +            info.setLastCheck(Instant.MIN);
 +            info.setLatestRelease(null);
 +            saveInfo();
@@ -66,7 +137,7 @@ index 7541190..653f7bc 100644
      }
  
      public void saveInfo() throws IOException {
-@@ -64,6 +87,23 @@ public class LauncherUpdateChecker {
+@@ -64,6 +84,21 @@ public class LauncherUpdateChecker {
          }
      }
  
@@ -74,15 +145,13 @@ index 7541190..653f7bc 100644
 +        return info != null ? info.getChannel() : UpdateChannel.STABLE;
 +    }
 +
-+    // Switches the update channel and immediately triggers a fresh check against the new channel. 
 +    public void setChannel(UpdateChannel channel) throws IOException {
 +        if (info == null) throw new IllegalStateException("Call loadInfo first!");
-+        LOGGER.info("Switching update channel from {} to {}.", new Object[]{info.getChannel(), channel});
++        LOGGER.info("User switching update channel from {} to {}.", new Object[]{info.getChannel(), channel});
 +        info.setChannel(channel);
 +        info.setLastCheck(Instant.MIN);
 +        info.setLatestRelease(null);
 +        info.getIgnoreVersions().clear();
-+        channelSwitchPending = true;
 +        saveInfo();
 +        updateCheck();
 +    }
@@ -90,7 +159,7 @@ index 7541190..653f7bc 100644
      public void ignoreUpdate(long upd) {
          info.getIgnoreVersions().add(upd);
      }
-@@ -80,11 +120,15 @@ public class LauncherUpdateChecker {
+@@ -80,19 +115,11 @@ public class LauncherUpdateChecker {
              return;
          }
  
@@ -99,19 +168,18 @@ index 7541190..653f7bc 100644
 -            || LauncherVersion.getInstance().isDirty())) {
 -            LOGGER.info("Not checking for updates because this is a development version or the working tree is dirty.");
 -            return;
-+        // Dev-channel users always check for updates, even on dev/dirty builds.
-+        // Stable-channel users skip checks on dev or dirty builds (unless overridden).
-+        if (info.getChannel() == UpdateChannel.STABLE) {
-+            if (!System.getProperty("dev.figboot.olauncher.LauncherUpdateChecker.updateTest", "false").equalsIgnoreCase("true")
-+                && (LauncherVersion.getInstance().isDevVersion()
-+                || LauncherVersion.getInstance().isDirty())) {
-+                LOGGER.info("Not checking for updates because this is a development version or the working tree is dirty.");
-+                return;
-+            }
-         }
- 
+-        }
+-
          Instant checkTime = info.getLastCheck().plus(UPDATE_CHECK_FREQ, UPDATE_CHECK_FREQ_UNIT);
-@@ -105,49 +149,94 @@ public class LauncherUpdateChecker {
+         Instant now = Instant.now();
+         if (checkTime.isAfter(now) && info.getLatestRelease() != null) {
+             LOGGER.info("It is not time to query releases yet. Wait another {} minutes.",
+                     new Object[]{ChronoUnit.MINUTES.between(now, checkTime)});
+-
+             onReleaseResponse();
+             return;
+         }
+@@ -105,46 +132,97 @@ public class LauncherUpdateChecker {
              }
          });
  
@@ -127,17 +195,14 @@ index 7541190..653f7bc 100644
 -        conn.setRequestProperty("User-Agent", LauncherVersion.getLauncherName() + "/" + LauncherVersion.getVersion());
 -        conn.setConnectTimeout(5000);
 -        conn.setReadTimeout(30000);
--
-         ReleaseInfo release;
++        ReleaseInfo release = info.getChannel() == UpdateChannel.DEV
++                ? queryLatestPrerelease()
++                : queryLatestStableRelease();
  
+-        ReleaseInfo release;
+-
 -        if (conn.getResponseCode() / 100 != 2) {
 -            LOGGER.error("Error response code returned by server: " + conn.getResponseCode() + " " + conn.getResponseMessage());
-+        if (info.getChannel() == UpdateChannel.DEV) {
-+            release = queryLatestPrerelease();
-+        } else {
-+            release = queryLatestStableRelease();
-+        }
-+
 +        if (release == null) {
 +            LOGGER.warn("No suitable release found on the {} channel.", new Object[]{info.getChannel()});
              return;
@@ -152,7 +217,7 @@ index 7541190..653f7bc 100644
 +    private ReleaseInfo queryLatestStableRelease() throws IOException {
 +        HttpURLConnection conn = openConnection(GITHUB_LATEST_RELEASE_URL);
 +        if (conn.getResponseCode() / 100 != 2) {
-+            LOGGER.error("Error response code returned by server: " + conn.getResponseCode() + " " + conn.getResponseMessage());
++            LOGGER.error("Error response from server: {} {}", new Object[]{conn.getResponseCode(), conn.getResponseMessage()});
 +            return null;
 +        }
          try (Reader r = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
@@ -167,7 +232,7 @@ index 7541190..653f7bc 100644
 +    private ReleaseInfo queryLatestPrerelease() throws IOException {
 +        HttpURLConnection conn = openConnection(GITHUB_RELEASES_URL);
 +        if (conn.getResponseCode() / 100 != 2) {
-+            LOGGER.error("Error response code returned by server: " + conn.getResponseCode() + " " + conn.getResponseMessage());
++            LOGGER.error("Error response from server: {} {}", new Object[]{conn.getResponseCode(), conn.getResponseMessage()});
 +            return null;
 +        }
 +        try (Reader r = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
@@ -196,55 +261,65 @@ index 7541190..653f7bc 100644
 +                new Object[]{info.getChannel(), release.getName(), release.getID()});
  
          if (info.getIgnoreVersions().contains(release.getID())) {
-+            channelSwitchPending = false;
              return;
          }
  
 -        String curTag = LauncherVersion.getInstance().getTag();
 -        if (release.getTagName().compareTo(curTag) > 0) {
-+        boolean shouldUpdate = channelSwitchPending || shouldShowUpdateDialog(release);
-+        channelSwitchPending = false;
+-            new UpdateAvailableDialog(this, release);
++        if (!shouldShowUpdateDialog(release)) return;
 +
-+        if (shouldUpdate) {
-             new UpdateAvailableDialog(this, release);
++        if (LauncherVersion.getInstance().isDirty()) {
++            LOGGER.info("Update available ({}) but notification suppressed for dirty build.",
++                    new Object[]{release.getTagName()});
++            return;
++        }
++
++        new UpdateAvailableDialog(this, release);
++    }
++
++    private boolean shouldShowUpdateDialog(ReleaseInfo release) {
++        if (info.getChannel() == UpdateChannel.DEV) {
++            String fullCommitId = LauncherVersion.getInstance().getFullCommitId();
++            String buildSha = release.getBuildSha();
++            if (fullCommitId != null && buildSha != null) {
++                return !buildSha.equalsIgnoreCase(fullCommitId);
++            }
++            String commitId = LauncherVersion.getInstance().getCommitId();
++            return commitId == null || !release.getTagName().contains(commitId);
++        } else {
++            if (LauncherVersion.getInstance().isDevVersion() || LauncherVersion.getInstance().isDirty()) {
++                return true;
++            }
++            String curTag = LauncherVersion.getInstance().getTag();
++            return release.getTagName().compareTo(curTag) > 0;
          }
      }
  
-+    private boolean shouldShowUpdateDialog(ReleaseInfo release) {
-+        if (info.getChannel() == UpdateChannel.DEV) {
-+            String commitId = LauncherVersion.getInstance().getCommitId();
-+            return commitId != null && !release.getTagName().endsWith(commitId);
-+        } else {
-+            String curTag = LauncherVersion.getInstance().getTag();
-+            return release.getTagName().compareTo(curTag) > 0;
-+        }
-+    }
-+
-     private static URL constantURL(String url) {
-         try {
-             return new URL(url);
 diff --git a/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateInfo.java b/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateInfo.java
-index 836316b..f830287 100644
+index 836316b..16c7824 100644
 --- a/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateInfo.java
 +++ b/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateInfo.java
-@@ -13,6 +13,7 @@ public class LauncherUpdateInfo {
+@@ -13,6 +13,8 @@ public class LauncherUpdateInfo {
      @Getter private List<Long> ignoreVersions;
      @Getter @Setter private boolean disabled;
      @Getter @Setter private ReleaseInfo latestRelease;
 +    @Getter @Setter private UpdateChannel channel;
++    @Getter @Setter private boolean devBuild;
  
      public static LauncherUpdateInfo defaults() {
          LauncherUpdateInfo info = new LauncherUpdateInfo();
-@@ -20,6 +21,7 @@ public class LauncherUpdateInfo {
+@@ -20,6 +22,8 @@ public class LauncherUpdateInfo {
          info.ignoreVersions = new LinkedList<>();
          info.disabled = false;
          info.latestRelease = null;
 +        info.channel = UpdateChannel.STABLE;
++        info.devBuild = false;
          return info;
      }
  }
 diff --git a/src/main/java/dev/figboot/olauncher/launcher/update/ReleaseInfo.java b/src/main/java/dev/figboot/olauncher/launcher/update/ReleaseInfo.java
-index 74026c7..15b307a 100644
+index 74026c7..99c5a2c 100644
 --- a/src/main/java/dev/figboot/olauncher/launcher/update/ReleaseInfo.java
 +++ b/src/main/java/dev/figboot/olauncher/launcher/update/ReleaseInfo.java
 @@ -13,8 +13,13 @@ public class ReleaseInfo {
@@ -260,6 +335,24 @@ index 74026c7..15b307a 100644
 +
      public Instant getCreatedAt() {
          return created_at;
+     }
+@@ -39,6 +44,17 @@ public class ReleaseInfo {
+         return body;
+     }
+ 
++    public String getBuildSha() {
++        if (body == null) return null;
++        for (String line : body.split("\r?\n")) {
++            if (line.startsWith("build-sha:")) {
++                String sha = line.substring("build-sha:".length()).trim();
++                if (sha.matches("[0-9a-fA-F]{40}")) return sha;
++            }
++        }
++        return null;
++    }
++
+     public List<Asset> getAssets() {
+         return Collections.unmodifiableList(assets);
      }
 diff --git a/src/main/java/dev/figboot/olauncher/launcher/update/UpdateAvailableDialog.java b/src/main/java/dev/figboot/olauncher/launcher/update/UpdateAvailableDialog.java
 index 54d2325..9441e31 100644
@@ -432,7 +525,7 @@ index 07f8ed9..9ccae09 100644
      }
  
 diff --git a/src/main/java/net/minecraft/launcher/ui/tabs/AboutTab.java b/src/main/java/net/minecraft/launcher/ui/tabs/AboutTab.java
-index 9f6dbad..1d52c73 100644
+index 9f6dbad..0b92559 100644
 --- a/src/main/java/net/minecraft/launcher/ui/tabs/AboutTab.java
 +++ b/src/main/java/net/minecraft/launcher/ui/tabs/AboutTab.java
 @@ -5,6 +5,7 @@ package net.minecraft.launcher.ui.tabs;
@@ -484,7 +577,7 @@ index 9f6dbad..1d52c73 100644
 +        if (checker != null) {
 +            sidebarBox.add(Box.createVerticalStrut(12));
 +
-+            JButton channelBtn = new JButton("Update Channel...");
++            JButton channelBtn = new JButton("Update Channel");
 +            channelBtn.setAlignmentX(JComponent.LEFT_ALIGNMENT);
 +            channelBtn.setMaximumSize(new Dimension(Integer.MAX_VALUE, channelBtn.getPreferredSize().height));
 +            channelBtn.addActionListener(e -> new UpdateChannelDialog(checker));

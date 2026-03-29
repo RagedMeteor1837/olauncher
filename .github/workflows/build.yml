@@ -126,7 +126,7 @@ jobs:
           gh release create "$DEV_TAG" \
             --draft \
             --prerelease \
-            --title "Dev Build $DEV_TAG" \
+            --title "$DEV_TAG" \
             --notes "$NOTES" \
             --target "$COMMIT_SHA" \
             "$ARTIFACT_PATH"/*.jar
