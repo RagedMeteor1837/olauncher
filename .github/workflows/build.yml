@@ -49,7 +49,7 @@ jobs:
     - name: Compute versions
       id: compute-versions
       run: |
-        echo "OUTER_DESCR=$(git describe --tags --dirty --always || echo unknown)" >> $GITHUB_ENV
+        echo "OUTER_DESCR=$(git describe --tags --dirty --always --match 'v*' || echo unknown)" >> $GITHUB_ENV
         OUTER_SHA_VAL=$(git rev-parse --short=12 HEAD)
         echo "OUTER_SHA=$OUTER_SHA_VAL" >> $GITHUB_ENV
         echo "outer-sha=$OUTER_SHA_VAL" >> $GITHUB_OUTPUT
@@ -122,7 +122,7 @@ jobs:
           ARTIFACT_PATH: ${{ steps.download-artifact.outputs.download-path }}
           COMMIT_SHA: ${{ github.sha }}
         run: |
-          NOTES=$(printf 'Automated dev build from commit %s\nbuild-sha: %s' "$COMMIT_SHA" "$COMMIT_SHA")
+          NOTES=$(printf 'Automated dev build from commit %s\n "$COMMIT_SHA")
           gh release create "$DEV_TAG" \
             --draft \
             --prerelease \

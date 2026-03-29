@@ -1,0 +1,36 @@
+From ff5f5ccd434240d6a82d21166d083c17d876d5cc Mon Sep 17 00:00:00 2001
+From: RagedMeteor1837 <148640131+RagedMeteor1837@users.noreply.github.com>
+Date: Sun, 29 Mar 2026 21:51:22 +0100
+Subject: [PATCH] change button slightly, and pom
+
+
+diff --git a/pom.xml b/pom.xml
+index c9bd104..cb29589 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -112,7 +112,8 @@
+                             <generateGitPropertiesFilename>${project.build.outputDirectory}/ver/git-outer.properties</generateGitPropertiesFilename>
+                             <dotGitDirectory>../.git</dotGitDirectory>
+                             <gitDescribe>
+-                                <tags>true</tags> <!-- include unannotated tags (occurs during shallow clones) -->
++                                <tags>true</tags> 
++                                <match>v*</match> 
+                             </gitDescribe>
+                             <includeOnlyProperties>
+                                 <property>^git.closest.tag.name$</property>
+diff --git a/src/main/java/net/minecraft/launcher/ui/tabs/AboutTab.java b/src/main/java/net/minecraft/launcher/ui/tabs/AboutTab.java
+index 1d52c73..0b92559 100644
+--- a/src/main/java/net/minecraft/launcher/ui/tabs/AboutTab.java
++++ b/src/main/java/net/minecraft/launcher/ui/tabs/AboutTab.java
+@@ -100,7 +100,7 @@ public class AboutTab extends JPanel {
+         if (checker != null) {
+             sidebarBox.add(Box.createVerticalStrut(12));
+ 
+-            JButton channelBtn = new JButton("Update Channel...");
++            JButton channelBtn = new JButton("Update Channel");
+             channelBtn.setAlignmentX(JComponent.LEFT_ALIGNMENT);
+             channelBtn.setMaximumSize(new Dimension(Integer.MAX_VALUE, channelBtn.getPreferredSize().height));
+             channelBtn.addActionListener(e -> new UpdateChannelDialog(checker));
+-- 
+2.50.1 (Apple Git-155)
+
