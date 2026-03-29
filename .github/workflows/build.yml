@@ -52,7 +52,7 @@ jobs:
         echo "OUTER_DESCR=$(git describe --tags --dirty --always --match 'v*' || echo unknown)" >> $GITHUB_ENV
         OUTER_SHA_VAL=$(git rev-parse --short=12 HEAD)
         echo "OUTER_SHA=$OUTER_SHA_VAL" >> $GITHUB_ENV
-        echo "outer-sha=$OUTER_SHA_VAL" >> $GITHUB_OUTPUT
+        echo "outer-sha=$(date -u +%Y%m%d)-$OUTER_SHA_VAL" >> $GITHUB_OUTPUT
         if [ -z "$(git status --porcelain)" ]; then echo "OUTER_DIRTY=clean" >> $GITHUB_ENV; else echo "OUTER_DIRTY=dirty" >> $GITHUB_ENV; fi
         pushd olauncher >/dev/null
         echo "INNER_DESCR=$(git describe --tags --dirty --always || echo unknown)" >> $GITHUB_ENV
