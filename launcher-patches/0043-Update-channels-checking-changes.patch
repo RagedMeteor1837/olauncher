@@ -1,0 +1,479 @@
+From 4c142f9e5347ecbc2e9cef46060b26511f2af6c4 Mon Sep 17 00:00:00 2001
+From: RagedMeteor1837 <148640131+RagedMeteor1837@users.noreply.github.com>
+Date: Sun, 29 Mar 2026 20:34:46 +0100
+Subject: [PATCH] Update channels & checking changes
+
+
+diff --git a/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateChecker.java b/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateChecker.java
+index 7541190..20039b5 100644
+--- a/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateChecker.java
++++ b/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateChecker.java
+@@ -21,6 +21,8 @@ import java.nio.file.Path;
+ import java.time.Instant;
+ import java.time.temporal.ChronoUnit;
+ import java.time.temporal.TemporalUnit;
++import java.util.Arrays;
++import java.util.Comparator;
+ import java.util.LinkedList;
+ import java.util.List;
+ 
+@@ -29,6 +31,7 @@ public class LauncherUpdateChecker {
+     private static final String INFO_FILE_NAME = "olauncher_update.json";
+ 
+     private static final URL GITHUB_LATEST_RELEASE_URL = constantURL("https://api.github.com/repos/RagedMeteor1837/olauncher/releases/latest");
++    private static final URL GITHUB_RELEASES_URL = constantURL("https://api.github.com/repos/RagedMeteor1837/olauncher/releases?per_page=100");
+ 
+     private static final long UPDATE_CHECK_FREQ = 3;
+     private static final TemporalUnit UPDATE_CHECK_FREQ_UNIT = ChronoUnit.HOURS;
+@@ -36,6 +39,8 @@ public class LauncherUpdateChecker {
+     private final Gson gson;
+     private LauncherUpdateInfo info;
+ 
++    private boolean channelSwitchPending = false;
++
+     public LauncherUpdateChecker() {
+         gson = new GsonBuilder()
+                 .registerTypeAdapter(Instant.class, new InstantTypeAdapter())
+@@ -54,6 +59,11 @@ public class LauncherUpdateChecker {
+         try (Reader r = Files.newBufferedReader(infoFile)) {
+             info = gson.fromJson(r, LauncherUpdateInfo.class);
+         }
++
++        // Migrate existing installs that pre-date the channel field.
++        if (info.getChannel() == null) {
++            info.setChannel(UpdateChannel.STABLE);
++        }
+     }
+ 
+     public void saveInfo() throws IOException {
+@@ -64,6 +74,23 @@ public class LauncherUpdateChecker {
+         }
+     }
+ 
++    public UpdateChannel getChannel() {
++        return info != null ? info.getChannel() : UpdateChannel.STABLE;
++    }
++
++    // Switches the update channel and immediately triggers a fresh check against the new channel. 
++    public void setChannel(UpdateChannel channel) throws IOException {
++        if (info == null) throw new IllegalStateException("Call loadInfo first!");
++        LOGGER.info("Switching update channel from {} to {}.", new Object[]{info.getChannel(), channel});
++        info.setChannel(channel);
++        info.setLastCheck(Instant.MIN);
++        info.setLatestRelease(null);
++        info.getIgnoreVersions().clear();
++        channelSwitchPending = true;
++        saveInfo();
++        updateCheck();
++    }
++
+     public void ignoreUpdate(long upd) {
+         info.getIgnoreVersions().add(upd);
+     }
+@@ -80,11 +107,15 @@ public class LauncherUpdateChecker {
+             return;
+         }
+ 
+-        if (!System.getProperty("dev.figboot.olauncher.LauncherUpdateChecker.updateTest", "false").equalsIgnoreCase("true")
+-            && (LauncherVersion.getInstance().isDevVersion()
+-            || LauncherVersion.getInstance().isDirty())) {
+-            LOGGER.info("Not checking for updates because this is a development version or the working tree is dirty.");
+-            return;
++        // Dev-channel users always check for updates, even on dev/dirty builds.
++        // Stable-channel users skip checks on dev or dirty builds (unless overridden).
++        if (info.getChannel() == UpdateChannel.STABLE) {
++            if (!System.getProperty("dev.figboot.olauncher.LauncherUpdateChecker.updateTest", "false").equalsIgnoreCase("true")
++                && (LauncherVersion.getInstance().isDevVersion()
++                || LauncherVersion.getInstance().isDirty())) {
++                LOGGER.info("Not checking for updates because this is a development version or the working tree is dirty.");
++                return;
++            }
+         }
+ 
+         Instant checkTime = info.getLastCheck().plus(UPDATE_CHECK_FREQ, UPDATE_CHECK_FREQ_UNIT);
+@@ -105,49 +136,94 @@ public class LauncherUpdateChecker {
+             }
+         });
+ 
+-        LOGGER.info("Querying latest release...");
++        LOGGER.info("Querying latest release on {} channel...", new Object[]{info.getChannel()});
+         checker.setDaemon(true);
+         checker.start();
+     }
+ 
+     private void queryReleases() throws IOException {
+-        HttpURLConnection conn = (HttpURLConnection)GITHUB_LATEST_RELEASE_URL.openConnection();
+-        conn.setRequestProperty("Accept", "application/vnd.github.v3+json");
+-        conn.setRequestProperty("User-Agent", LauncherVersion.getLauncherName() + "/" + LauncherVersion.getVersion());
+-        conn.setConnectTimeout(5000);
+-        conn.setReadTimeout(30000);
+-
+         ReleaseInfo release;
+ 
+-        if (conn.getResponseCode() / 100 != 2) {
+-            LOGGER.error("Error response code returned by server: " + conn.getResponseCode() + " " + conn.getResponseMessage());
++        if (info.getChannel() == UpdateChannel.DEV) {
++            release = queryLatestPrerelease();
++        } else {
++            release = queryLatestStableRelease();
++        }
++
++        if (release == null) {
++            LOGGER.warn("No suitable release found on the {} channel.", new Object[]{info.getChannel()});
+             return;
+         }
+ 
++        info.setLastCheck(Instant.now());
++        info.setLatestRelease(release);
++        saveInfo();
++        onReleaseResponse();
++    }
++
++    private ReleaseInfo queryLatestStableRelease() throws IOException {
++        HttpURLConnection conn = openConnection(GITHUB_LATEST_RELEASE_URL);
++        if (conn.getResponseCode() / 100 != 2) {
++            LOGGER.error("Error response code returned by server: " + conn.getResponseCode() + " " + conn.getResponseMessage());
++            return null;
++        }
+         try (Reader r = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
+-            release = gson.fromJson(r, ReleaseInfo.class);
++            return gson.fromJson(r, ReleaseInfo.class);
++        }
++    }
+ 
+-            info.setLastCheck(Instant.now());
+-            info.setLatestRelease(release);
+-            saveInfo();
++    private ReleaseInfo queryLatestPrerelease() throws IOException {
++        HttpURLConnection conn = openConnection(GITHUB_RELEASES_URL);
++        if (conn.getResponseCode() / 100 != 2) {
++            LOGGER.error("Error response code returned by server: " + conn.getResponseCode() + " " + conn.getResponseMessage());
++            return null;
++        }
++        try (Reader r = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
++            ReleaseInfo[] releases = gson.fromJson(r, ReleaseInfo[].class);
++            return Arrays.stream(releases)
++                    .filter(ReleaseInfo::isPrerelease)
++                    .max(Comparator.comparing(ReleaseInfo::getCreatedAt))
++                    .orElse(null);
+         }
+-        onReleaseResponse();
++    }
++
++    private HttpURLConnection openConnection(URL url) throws IOException {
++        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
++        conn.setRequestProperty("Accept", "application/vnd.github.v3+json");
++        conn.setRequestProperty("User-Agent", LauncherVersion.getLauncherName() + "/" + LauncherVersion.getVersion());
++        conn.setConnectTimeout(5000);
++        conn.setReadTimeout(30000);
++        return conn;
+     }
+ 
+     private void onReleaseResponse() {
+         ReleaseInfo release = info.getLatestRelease();
+-        LOGGER.info("Latest release is {} (ID {}).", new Object[]{release.getName(), release.getID()});
++        LOGGER.info("Latest {} channel release is {} (ID {}).",
++                new Object[]{info.getChannel(), release.getName(), release.getID()});
+ 
+         if (info.getIgnoreVersions().contains(release.getID())) {
++            channelSwitchPending = false;
+             return;
+         }
+ 
+-        String curTag = LauncherVersion.getInstance().getTag();
+-        if (release.getTagName().compareTo(curTag) > 0) {
++        boolean shouldUpdate = channelSwitchPending || shouldShowUpdateDialog(release);
++        channelSwitchPending = false;
++
++        if (shouldUpdate) {
+             new UpdateAvailableDialog(this, release);
+         }
+     }
+ 
++    private boolean shouldShowUpdateDialog(ReleaseInfo release) {
++        if (info.getChannel() == UpdateChannel.DEV) {
++            String commitId = LauncherVersion.getInstance().getCommitId();
++            return commitId != null && !release.getTagName().endsWith(commitId);
++        } else {
++            String curTag = LauncherVersion.getInstance().getTag();
++            return release.getTagName().compareTo(curTag) > 0;
++        }
++    }
++
+     private static URL constantURL(String url) {
+         try {
+             return new URL(url);
+diff --git a/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateInfo.java b/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateInfo.java
+index 836316b..f830287 100644
+--- a/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateInfo.java
++++ b/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateInfo.java
+@@ -13,6 +13,7 @@ public class LauncherUpdateInfo {
+     @Getter private List<Long> ignoreVersions;
+     @Getter @Setter private boolean disabled;
+     @Getter @Setter private ReleaseInfo latestRelease;
++    @Getter @Setter private UpdateChannel channel;
+ 
+     public static LauncherUpdateInfo defaults() {
+         LauncherUpdateInfo info = new LauncherUpdateInfo();
+@@ -20,6 +21,7 @@ public class LauncherUpdateInfo {
+         info.ignoreVersions = new LinkedList<>();
+         info.disabled = false;
+         info.latestRelease = null;
++        info.channel = UpdateChannel.STABLE;
+         return info;
+     }
+ }
+diff --git a/src/main/java/dev/figboot/olauncher/launcher/update/ReleaseInfo.java b/src/main/java/dev/figboot/olauncher/launcher/update/ReleaseInfo.java
+index 74026c7..15b307a 100644
+--- a/src/main/java/dev/figboot/olauncher/launcher/update/ReleaseInfo.java
++++ b/src/main/java/dev/figboot/olauncher/launcher/update/ReleaseInfo.java
+@@ -13,8 +13,13 @@ public class ReleaseInfo {
+     private String tag_name;
+     private String body;
+ 
++    private boolean prerelease;
+     private List<Asset> assets;
+ 
++    public boolean isPrerelease() {
++        return prerelease;
++    }
++
+     public Instant getCreatedAt() {
+         return created_at;
+     }
+diff --git a/src/main/java/dev/figboot/olauncher/launcher/update/UpdateAvailableDialog.java b/src/main/java/dev/figboot/olauncher/launcher/update/UpdateAvailableDialog.java
+index 54d2325..9441e31 100644
+--- a/src/main/java/dev/figboot/olauncher/launcher/update/UpdateAvailableDialog.java
++++ b/src/main/java/dev/figboot/olauncher/launcher/update/UpdateAvailableDialog.java
+@@ -54,7 +54,8 @@ public class UpdateAvailableDialog extends JDialog {
+ 
+         setLayout(new BorderLayout());
+ 
+-        JLabel headerLabel = new JLabel("Launcher update available");
++        String channelLabel = checker.getChannel() == UpdateChannel.DEV ? " (Dev Channel)" : "";
++        JLabel headerLabel = new JLabel("Launcher update available" + channelLabel);
+         headerLabel.setBorder(new EmptyBorder(5, 5, 5, 5));
+         headerLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+         headerLabel.setFont(headerFont);
+diff --git a/src/main/java/dev/figboot/olauncher/launcher/update/UpdateChannel.java b/src/main/java/dev/figboot/olauncher/launcher/update/UpdateChannel.java
+new file mode 100644
+index 0000000..2849293
+--- /dev/null
++++ b/src/main/java/dev/figboot/olauncher/launcher/update/UpdateChannel.java
+@@ -0,0 +1,6 @@
++package dev.figboot.olauncher.launcher.update;
++
++public enum UpdateChannel {
++    STABLE,
++    DEV
++}
+diff --git a/src/main/java/dev/figboot/olauncher/launcher/update/UpdateChannelDialog.java b/src/main/java/dev/figboot/olauncher/launcher/update/UpdateChannelDialog.java
+new file mode 100644
+index 0000000..0ae3d6c
+--- /dev/null
++++ b/src/main/java/dev/figboot/olauncher/launcher/update/UpdateChannelDialog.java
+@@ -0,0 +1,89 @@
++package dev.figboot.olauncher.launcher.update;
++
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
++
++import javax.swing.*;
++import javax.swing.border.EmptyBorder;
++import java.awt.*;
++import java.awt.event.ActionEvent;
++import java.io.IOException;
++
++public class UpdateChannelDialog extends JDialog {
++    private static final Logger LOGGER = LogManager.getLogger();
++
++    private final LauncherUpdateChecker checker;
++    private JRadioButton rbStable;
++    private JRadioButton rbDev;
++
++    public UpdateChannelDialog(LauncherUpdateChecker checker) {
++        this.checker = checker;
++        SwingUtilities.invokeLater(this::initUI);
++    }
++
++    private void initUI() {
++        setModal(true);
++        setResizable(false);
++        setModalityType(ModalityType.APPLICATION_MODAL);
++        setDefaultCloseOperation(DISPOSE_ON_CLOSE);
++        setTitle("Update Channel");
++
++        JPanel root = new JPanel(new BorderLayout());
++        root.setBorder(new EmptyBorder(12, 12, 8, 12));
++
++        JLabel heading = new JLabel("Select update channel");
++        heading.setFont(heading.getFont().deriveFont(Font.BOLD, 14f));
++        heading.setBorder(new EmptyBorder(0, 0, 10, 0));
++        root.add(heading, BorderLayout.PAGE_START);
++
++        JPanel options = new JPanel();
++        options.setLayout(new BoxLayout(options, BoxLayout.Y_AXIS));
++
++        rbStable = new JRadioButton("<html><b>Stable</b> — Mainline releases from the master branch</html>");
++        rbDev    = new JRadioButton("<html><b>Dev</b> — Development builds from the dev branch</html>");
++
++        ButtonGroup group = new ButtonGroup();
++        group.add(rbStable);
++        group.add(rbDev);
++
++        if (checker.getChannel() == UpdateChannel.DEV) {
++            rbDev.setSelected(true);
++        } else {
++            rbStable.setSelected(true);
++        }
++
++        options.add(rbStable);
++        options.add(Box.createVerticalStrut(4));
++        options.add(rbDev);
++        root.add(options, BorderLayout.CENTER);
++
++        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
++        buttons.setBorder(new EmptyBorder(10, 0, 0, 0));
++
++        JButton btnOk = new JButton("OK");
++        btnOk.addActionListener(this::okClicked);
++        JButton btnCancel = new JButton("Cancel");
++        btnCancel.addActionListener(e -> dispose());
++
++        buttons.add(btnCancel);
++        buttons.add(btnOk);
++        root.add(buttons, BorderLayout.PAGE_END);
++
++        add(root);
++        pack();
++        setLocationRelativeTo(null);
++        setVisible(true);
++    }
++
++    private void okClicked(ActionEvent e) {
++        UpdateChannel selected = rbDev.isSelected() ? UpdateChannel.DEV : UpdateChannel.STABLE;
++        if (selected != checker.getChannel()) {
++            try {
++                checker.setChannel(selected);
++            } catch (IOException ex) {
++                LOGGER.error("Unable to switch update channel", ex);
++            }
++        }
++        dispose();
++    }
++}
+diff --git a/src/main/java/net/minecraft/launcher/Launcher.java b/src/main/java/net/minecraft/launcher/Launcher.java
+index 07f8ed9..9ccae09 100644
+--- a/src/main/java/net/minecraft/launcher/Launcher.java
++++ b/src/main/java/net/minecraft/launcher/Launcher.java
+@@ -78,6 +78,7 @@ public class Launcher {
+     private final ProfileManager profileManager;
+     private final Gson gson;
+     private final GameLaunchDispatcher launchDispatcher;
++    @Getter private LauncherUpdateChecker updateChecker; // olauncher
+     private boolean winTenHack;
+     private UUID clientToken;
+     private String requestedUser;
+@@ -119,19 +120,28 @@ public class Launcher {
+             this.launchDispatcher = new GameLaunchDispatcher(this, this.processArgs(var5));
+             this.launcher = new com.mojang.launcher.Launcher(this.userInterface, var2, var3, var4, new MinecraftVersionManager(new LocalVersionList(var2), new RemoteVersionList(LauncherConstants.PROPERTIES.getVersionManifest(), var3, this)), Agent.MINECRAFT, MinecraftReleaseTypeFactory.instance(), 21);
+             this.profileManager = new ProfileManager(this);
++
++            // load update checker before the frame so AboutTab can reference it
++            this.updateChecker = new LauncherUpdateChecker();
++            try {
++                this.updateChecker.loadInfo();
++            } catch (IOException ex) {
++                LOGGER.error("Error loading update checker state. Update checking will not continue.", ex);
++                this.updateChecker = null;
++            }
++
+             ((SwingUserInterface)this.userInterface).initializeFrame();
+             refreshJavaRuntimes(); // olauncher - refresh java runtimes
+             this.refreshVersionsAndProfiles();
+ 
+-            // olauncher start - check for updates
+-            LauncherUpdateChecker checker = new LauncherUpdateChecker();
+-            try {
+-                checker.loadInfo();
+-                checker.updateCheck();
+-            } catch (IOException ex) {
+-                LOGGER.error("Error checking for launcher updates. Update checking will not continue.", ex);
++            // trigger update check after frame is ready
++            if (this.updateChecker != null) {
++                try {
++                    this.updateChecker.updateCheck();
++                } catch (IOException ex) {
++                    LOGGER.error("Error checking for launcher updates.", ex);
++                }
+             }
+-            // olauncher end
+         }
+     }
+ 
+diff --git a/src/main/java/net/minecraft/launcher/ui/tabs/AboutTab.java b/src/main/java/net/minecraft/launcher/ui/tabs/AboutTab.java
+index 9f6dbad..1d52c73 100644
+--- a/src/main/java/net/minecraft/launcher/ui/tabs/AboutTab.java
++++ b/src/main/java/net/minecraft/launcher/ui/tabs/AboutTab.java
+@@ -5,6 +5,7 @@ package net.minecraft.launcher.ui.tabs;
+ import javax.swing.BorderFactory;
+ import javax.swing.Box;
+ import javax.swing.BoxLayout;
++import javax.swing.JButton;
+ import javax.swing.JLayeredPane;
+ import javax.swing.JComponent;
+ import javax.swing.JLabel;
+@@ -16,15 +17,19 @@ import javax.swing.border.EmptyBorder;
+ import java.awt.BorderLayout;
+ import java.awt.Color;
+ import java.awt.Dimension;
+-import java.awt.Font;
+ import java.awt.event.ComponentAdapter;
+ import java.awt.event.ComponentEvent;
+ 
+ import com.mojang.launcher.OperatingSystem;
++import dev.figboot.olauncher.launcher.update.LauncherUpdateChecker;
++import dev.figboot.olauncher.launcher.update.UpdateChannelDialog;
+ import net.minecraft.launcher.Launcher;
+ import net.minecraft.launcher.LauncherConstants;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
+ 
+ public class AboutTab extends JPanel {
++    private static final Logger LOGGER = LogManager.getLogger();
+     private final Launcher minecraftLauncher;
+ 
+     private final WebsiteTab websiteTab;
+@@ -52,10 +57,9 @@ public class AboutTab extends JPanel {
+         Color borderCol = UIManager.getColor("controlShadow");
+         if (borderCol == null) borderCol = new Color(200, 200, 200);
+ 
+-        Font labelFont = UIManager.getFont("Label.font");
++        java.awt.Font labelFont = UIManager.getFont("Label.font");
+         if (labelFont == null) labelFont = new JLabel().getFont();
+ 
+-
+         JPanel sidebarBox = new JPanel();
+         sidebarBox.setLayout(new BoxLayout(sidebarBox, BoxLayout.Y_AXIS));
+         sidebarBox.setOpaque(true);
+@@ -92,6 +96,17 @@ public class AboutTab extends JPanel {
+ 
+         sidebarBox.add(descText);
+ 
++        LauncherUpdateChecker checker = Launcher.getCurrentInstance().getUpdateChecker();
++        if (checker != null) {
++            sidebarBox.add(Box.createVerticalStrut(12));
++
++            JButton channelBtn = new JButton("Update Channel...");
++            channelBtn.setAlignmentX(JComponent.LEFT_ALIGNMENT);
++            channelBtn.setMaximumSize(new Dimension(Integer.MAX_VALUE, channelBtn.getPreferredSize().height));
++            channelBtn.addActionListener(e -> new UpdateChannelDialog(checker));
++            sidebarBox.add(channelBtn);
++        }
++
+         sidebarBox.add(Box.createVerticalGlue());
+ 
+         JPanel sidebar = new JPanel(new BorderLayout());
+-- 
+2.50.1 (Apple Git-155)
+

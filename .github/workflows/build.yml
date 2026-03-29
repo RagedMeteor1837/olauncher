@@ -10,7 +10,7 @@ name: Java CI with Maven
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "master", "dev" ]
     tags: [ "v*", "ci-test/**" ]
   pull_request:
     branches: [ "master" ]
@@ -20,6 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       artifact-id: ${{ steps.upload-artifact.outputs.artifact-id }}
+      outer-sha: ${{ steps.compute-versions.outputs.outer-sha }}
     steps:
     - uses: actions/checkout@v4
       with:
@@ -46,9 +47,12 @@ jobs:
         bash init.sh
         bash applyPatches.sh
     - name: Compute versions
+      id: compute-versions
       run: |
         echo "OUTER_DESCR=$(git describe --tags --dirty --always || echo unknown)" >> $GITHUB_ENV
-        echo "OUTER_SHA=$(git rev-parse --short=12 HEAD)" >> $GITHUB_ENV
+        OUTER_SHA_VAL=$(git rev-parse --short=12 HEAD)
+        echo "OUTER_SHA=$OUTER_SHA_VAL" >> $GITHUB_ENV
+        echo "outer-sha=$OUTER_SHA_VAL" >> $GITHUB_OUTPUT
         if [ -z "$(git status --porcelain)" ]; then echo "OUTER_DIRTY=clean" >> $GITHUB_ENV; else echo "OUTER_DIRTY=dirty" >> $GITHUB_ENV; fi
         pushd olauncher >/dev/null
         echo "INNER_DESCR=$(git describe --tags --dirty --always || echo unknown)" >> $GITHUB_ENV
@@ -95,3 +99,33 @@ jobs:
           GH_REPO: ${{ github.repository }}
           ARTIFACT_PATH: ${{ steps.download-artifact.outputs.download-path }}
         run: gh release create "$RELEASE_TAG" --draft --verify-tag --title "$RELEASE_TAG" "$ARTIFACT_PATH"/*.jar
+
+  dev-release:
+    if: ${{ github.ref == 'refs/heads/dev' }}
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download redistributable jar
+        uses: actions/download-artifact@v4
+        id: download-artifact
+        with:
+          artifact-ids: ${{ needs.build.outputs.artifact-id }}
+          merge-multiple: true
+          path: redist
+      - name: Create dev pre-release
+        env:
+          DEV_TAG: dev-${{ needs.build.outputs.outer-sha }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          ARTIFACT_PATH: ${{ steps.download-artifact.outputs.download-path }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          gh release create "$DEV_TAG" \
+            --draft \
+            --prerelease \
+            --title "Dev Build $DEV_TAG" \
+            --notes "Automated dev build from commit $COMMIT_SHA" \
+            --target "$COMMIT_SHA" \
+            "$ARTIFACT_PATH"/*.jar
