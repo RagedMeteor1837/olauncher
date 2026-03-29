@@ -122,7 +122,7 @@ jobs:
           ARTIFACT_PATH: ${{ steps.download-artifact.outputs.download-path }}
           COMMIT_SHA: ${{ github.sha }}
         run: |
-          NOTES=$(printf 'Automated dev build from commit %s\n "$COMMIT_SHA")
+          NOTES=$(printf 'build-sha: %s' "$COMMIT_SHA")
           gh release create "$DEV_TAG" \
             --draft \
             --prerelease \
