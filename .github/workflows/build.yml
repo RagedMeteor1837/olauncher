@@ -126,6 +126,7 @@ jobs:
             --draft \
             --prerelease \
             --title "Dev Build $DEV_TAG" \
-            --notes "Automated dev build from commit $COMMIT_SHA" \
+            --notes "Automated dev build from commit $COMMIT_SHA
+build-sha: $COMMIT_SHA" \
             --target "$COMMIT_SHA" \
             "$ARTIFACT_PATH"/*.jar
