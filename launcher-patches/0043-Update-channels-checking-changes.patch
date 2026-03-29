@@ -1,11 +1,11 @@
-From 4c142f9e5347ecbc2e9cef46060b26511f2af6c4 Mon Sep 17 00:00:00 2001
+From c725d321debf5b935096e10912ed61b27986f63f Mon Sep 17 00:00:00 2001
 From: RagedMeteor1837 <148640131+RagedMeteor1837@users.noreply.github.com>
 Date: Sun, 29 Mar 2026 20:34:46 +0100
 Subject: [PATCH] Update channels & checking changes
 
 
 diff --git a/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateChecker.java b/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateChecker.java
-index 7541190..20039b5 100644
+index 7541190..653f7bc 100644
 --- a/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateChecker.java
 +++ b/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateChecker.java
 @@ -21,6 +21,8 @@ import java.nio.file.Path;
@@ -34,19 +34,39 @@ index 7541190..20039b5 100644
      public LauncherUpdateChecker() {
          gson = new GsonBuilder()
                  .registerTypeAdapter(Instant.class, new InstantTypeAdapter())
-@@ -54,6 +59,11 @@ public class LauncherUpdateChecker {
+@@ -47,6 +52,10 @@ public class LauncherUpdateChecker {
+         Path infoFile = workDir.resolve(INFO_FILE_NAME);
+         if (!Files.isRegularFile(infoFile)) {
+             info = LauncherUpdateInfo.defaults();
++            if (LauncherVersion.getInstance().isDevVersion()) {
++                LOGGER.info("Dev build detected on first run — defaulting to DEV update channel.");
++                info.setChannel(UpdateChannel.DEV);
++            }
+             saveInfo();
+             return;
+         }
+@@ -54,6 +63,20 @@ public class LauncherUpdateChecker {
          try (Reader r = Files.newBufferedReader(infoFile)) {
              info = gson.fromJson(r, LauncherUpdateInfo.class);
          }
 +
 +        // Migrate existing installs that pre-date the channel field.
 +        if (info.getChannel() == null) {
-+            info.setChannel(UpdateChannel.STABLE);
++            info.setChannel(LauncherVersion.getInstance().isDevVersion() ? UpdateChannel.DEV : UpdateChannel.STABLE);
++        }
++
++        // If a dev build is launched against a stable-channel config, switch to DEV.
++        if (LauncherVersion.getInstance().isDevVersion() && info.getChannel() == UpdateChannel.STABLE) {
++            LOGGER.info("Dev build launched with stable channel config — switching to DEV update channel.");
++            info.setChannel(UpdateChannel.DEV);
++            info.setLastCheck(Instant.MIN);
++            info.setLatestRelease(null);
++            saveInfo();
 +        }
      }
  
      public void saveInfo() throws IOException {
-@@ -64,6 +74,23 @@ public class LauncherUpdateChecker {
+@@ -64,6 +87,23 @@ public class LauncherUpdateChecker {
          }
      }
  
@@ -70,7 +90,7 @@ index 7541190..20039b5 100644
      public void ignoreUpdate(long upd) {
          info.getIgnoreVersions().add(upd);
      }
-@@ -80,11 +107,15 @@ public class LauncherUpdateChecker {
+@@ -80,11 +120,15 @@ public class LauncherUpdateChecker {
              return;
          }
  
@@ -91,7 +111,7 @@ index 7541190..20039b5 100644
          }
  
          Instant checkTime = info.getLastCheck().plus(UPDATE_CHECK_FREQ, UPDATE_CHECK_FREQ_UNIT);
-@@ -105,49 +136,94 @@ public class LauncherUpdateChecker {
+@@ -105,49 +149,94 @@ public class LauncherUpdateChecker {
              }
          });
  

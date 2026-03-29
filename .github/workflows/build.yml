@@ -78,7 +78,7 @@ jobs:
         name: OLauncher Redistributable JAR
         path: olauncher-*-redist.jar
 
-  draft-release:
+  draft-master-release:
     if: ${{ github.ref_type == 'tag' }}
     needs: build
     runs-on: ubuntu-latest
