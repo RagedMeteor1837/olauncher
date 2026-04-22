@@ -12,8 +12,18 @@ on:
   push:
     branches: [ "master", "dev" ]
     tags: [ "v*", "ci-test/**" ]
+    paths-ignore:
+      - '**.md'
+      - '**.txt'
+      - 'LICENSE'
+      - '.gitignore'
   pull_request:
-    branches: [ "master" ]
+    branches: [ "master", "dev" ]
+    paths-ignore:
+      - '**.md'
+      - '**.txt'
+      - 'LICENSE'
+      - '.gitignore'
 
 jobs:
   build:
