@@ -2,7 +2,7 @@
 The old launcher we all know and love with the QoL features of the new launcher.
 
 ## Project Status
-This project is maintained on a best-effort basis and updates will only be made when I have the time.
+This project is maintained on a best-effort basis and updates will only be made when I have the time. See [here](https://ragedmeteor1837.github.io/olauncherabout/news/) for more information.
 
 ## How to use
 1. Go to the [latest release](https://github.com/RagedMeteor1837/olauncher/releases/latest)
