@@ -86,7 +86,7 @@ jobs:
     - name: Rename dev build artifact
       if: github.ref == 'refs/heads/dev'
       run: |
-        mv olauncher-*-redist.jar olauncher-dev${{ env.OUTER_SHA }}-redist.jar    
+        mv olauncher-*-redist.jar olauncher-${{ env.OUTER_SHA }}-redist.jar    
     - name: Upload redistributable
       uses: actions/upload-artifact@v4
       id: upload-artifact
@@ -138,7 +138,7 @@ jobs:
           ARTIFACT_PATH: ${{ steps.download-artifact.outputs.download-path }}
           COMMIT_SHA: ${{ github.sha }}
         run: |
-          NOTES=$(printf 'build-sha: %s' "$COMMIT_SHA")
+          NOTES=$(printf '(build-sha: %s)' "$COMMIT_SHA")
           gh release create "$DEV_TAG" \
             --draft \
             --prerelease \
