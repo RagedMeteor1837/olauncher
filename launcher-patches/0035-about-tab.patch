@@ -1,4 +1,4 @@
-From 1ccd05896318a94570455121b68bd5f2db42bfb8 Mon Sep 17 00:00:00 2001
+From f87c6a3f9c59d7b13a415c01c4489a183d42abe1 Mon Sep 17 00:00:00 2001
 From: RagedMeteor1837 <148640131+RagedMeteor1837@users.noreply.github.com>
 Date: Mon, 29 Sep 2025 23:23:11 +0100
 Subject: [PATCH] about tab
@@ -335,7 +335,7 @@ index 0000000..9f6dbad
 +    }
 +}
 diff --git a/src/main/java/net/minecraft/launcher/ui/tabs/LauncherTabPanel.java b/src/main/java/net/minecraft/launcher/ui/tabs/LauncherTabPanel.java
-index 07d3253..86a404c 100644
+index 9b9b28c..ada422e 100644
 --- a/src/main/java/net/minecraft/launcher/ui/tabs/LauncherTabPanel.java
 +++ b/src/main/java/net/minecraft/launcher/ui/tabs/LauncherTabPanel.java
 @@ -8,6 +8,7 @@ public class LauncherTabPanel extends JTabbedPane {
@@ -357,7 +357,7 @@ index 07d3253..86a404c 100644
 +    
      protected void createInterface() {
          this.addTab("Update Notes", this.blog);
-         this.addTab("Instance Editor", new ProfileListTab(this.minecraftLauncher));
+         this.addTab("Profile Editor", new ProfileListTab(this.minecraftLauncher));
          this.addTab("Launcher Log", this.console);
 +        this.addTab("About OLauncher", this.about);
      }
@@ -374,19 +374,6 @@ index 07d3253..86a404c 100644
      public void showConsole() {
          this.setSelectedComponent(this.console);
      }
-diff --git a/src/main/java/net/minecraft/launcher/ui/tabs/ProfileListTab.java b/src/main/java/net/minecraft/launcher/ui/tabs/ProfileListTab.java
-index 18c5d86..d680998 100644
---- a/src/main/java/net/minecraft/launcher/ui/tabs/ProfileListTab.java
-+++ b/src/main/java/net/minecraft/launcher/ui/tabs/ProfileListTab.java
-@@ -208,7 +208,7 @@ public class ProfileListTab extends JScrollPane implements RefreshedProfilesList
-         public String getColumnName(int var1) {
-             switch(var1) {
-             case 0:
--                return "Version name";
-+                return "Instance name";
-             case 1:
-                 return "Version";
-             default:
 diff --git a/src/main/java/net/minecraft/launcher/ui/tabs/website/LegacySwingBrowser.java b/src/main/java/net/minecraft/launcher/ui/tabs/website/LegacySwingBrowser.java
 index 6d6b17c..3e97011 100644
 --- a/src/main/java/net/minecraft/launcher/ui/tabs/website/LegacySwingBrowser.java
@@ -455,5 +442,5 @@ index 6d6b17c..3e97011 100644
          };
          var2.setDaemon(true);
 -- 
-2.53.0.windows.1
+2.43.0
 
