@@ -62,13 +62,13 @@ jobs:
       id: compute-versions
       run: |
         echo "OUTER_DESCR=$(git describe --tags --dirty --always --match 'v*' || echo unknown)" >> $GITHUB_ENV
-        OUTER_SHA_VAL=$(git rev-parse --short=12 HEAD)
+        OUTER_SHA_VAL=$(git rev-parse --short=7 HEAD)
         echo "OUTER_SHA=$OUTER_SHA_VAL" >> $GITHUB_ENV
         echo "outer-sha=$(date -u +%Y%m%d)-$OUTER_SHA_VAL" >> $GITHUB_OUTPUT
         if [ -z "$(git status --porcelain)" ]; then echo "OUTER_DIRTY=clean" >> $GITHUB_ENV; else echo "OUTER_DIRTY=dirty" >> $GITHUB_ENV; fi
         pushd olauncher >/dev/null
         echo "INNER_DESCR=$(git describe --tags --dirty --always || echo unknown)" >> $GITHUB_ENV
-        echo "INNER_SHA=$(git rev-parse --short=12 HEAD)" >> $GITHUB_ENV
+        echo "INNER_SHA=$(git rev-parse --short=7 HEAD)" >> $GITHUB_ENV
         if [ -z "$(git status --porcelain)" ]; then echo "INNER_DIRTY=clean" >> $GITHUB_ENV; else echo "INNER_DIRTY=dirty" >> $GITHUB_ENV; fi
         popd >/dev/null
     - name: Build with Maven
@@ -83,6 +83,10 @@ jobs:
           -Dinner.dirty="${{ env.INNER_DIRTY }}"
     - name: Generate redistributable
       run: bash genredist.sh
+    - name: Rename dev build artifact
+      if: github.ref == 'refs/heads/dev'
+      run: |
+        mv olauncher-*-redist.jar olauncher-dev${{ env.OUTER_SHA }}-redist.jar    
     - name: Upload redistributable
       uses: actions/upload-artifact@v4
       id: upload-artifact
