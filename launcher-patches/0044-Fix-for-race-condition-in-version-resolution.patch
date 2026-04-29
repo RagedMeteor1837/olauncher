@@ -1,0 +1,22 @@
+From 7d2a91db5c10c0a8e1a912d83efdf72b5e2cb0ef Mon Sep 17 00:00:00 2001
+From: RagedMeteor1837 <148640131+RagedMeteor1837@users.noreply.github.com>
+Date: Thu, 30 Apr 2026 00:45:06 +0100
+Subject: [PATCH] Fix for race condition in version resolution
+
+
+diff --git a/src/main/java/net/minecraft/launcher/updater/VersionList.java b/src/main/java/net/minecraft/launcher/updater/VersionList.java
+index 758ae42..3bf7d0a 100644
+--- a/src/main/java/net/minecraft/launcher/updater/VersionList.java
++++ b/src/main/java/net/minecraft/launcher/updater/VersionList.java
+@@ -81,7 +81,7 @@ public abstract class VersionList {
+         if (var1.getId() == null) {
+             throw new IllegalArgumentException("Cannot add blank version");
+         } else if (this.getVersion(var1.getId()) != null) {
+-            throw new IllegalArgumentException("Version '" + var1.getId() + "' is already tracked");
++            return var1; // fix for race condition - https://github.com/ragedmeteor1837/olauncher/issues/13
+         } else {
+             this.versions.add(var1);
+             this.versionsByName.put(var1.getId(), var1);
+-- 
+2.53.0
+
