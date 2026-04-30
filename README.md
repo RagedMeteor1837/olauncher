@@ -1,4 +1,4 @@
-# OLauncher
+# olauncher
 The old launcher we all know and love with the QoL features of the new launcher.
 
 ## Project Status
@@ -18,6 +18,7 @@ This project is maintained on a best-effort basis and updates will only be made 
 - Update checking
 - Displays latest release notes
 - ~~Displays Mojang server status~~
+- Custom launch arguments
 
 ## Build from source
 **1. Clone the repository**
