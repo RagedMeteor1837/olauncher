@@ -1,0 +1,181 @@
+From a4dd505d1a0d0b65a264bc3f0a3b920ae62faf93 Mon Sep 17 00:00:00 2001
+From: RagedMeteor1837 <148640131+RagedMeteor1837@users.noreply.github.com>
+Date: Thu, 30 Apr 2026 17:50:56 +0100
+Subject: [PATCH] Correct system architecture detection
+
+
+diff --git a/src/main/java/com/mojang/launcher/OperatingSystem.java b/src/main/java/com/mojang/launcher/OperatingSystem.java
+index 6eda188..18413fe 100644
+--- a/src/main/java/com/mojang/launcher/OperatingSystem.java
++++ b/src/main/java/com/mojang/launcher/OperatingSystem.java
+@@ -1,8 +1,11 @@
+ package com.mojang.launcher;
+ 
++import java.io.BufferedReader;
+ import java.io.File;
+ import java.io.IOException;
++import java.io.InputStreamReader;
+ import java.net.URI;
++import java.util.Locale;
+ import org.apache.logging.log4j.LogManager;
+ import org.apache.logging.log4j.Logger;
+ 
+@@ -13,6 +16,7 @@ public enum OperatingSystem {
+     UNKNOWN("unknown", new String[0]);
+ 
+     private static final Logger LOGGER = LogManager.getLogger();
++    private static volatile String systemArch;
+     private final String name;
+     private final String[] aliases;
+ 
+@@ -60,6 +64,60 @@ public enum OperatingSystem {
+         return UNKNOWN;
+     }
+ 
++    // olauncher - changes for https://github.com/RagedMeteor1837/olauncher/issues/7
++    public static String getSystemArch() {
++        if (systemArch == null) {
++            systemArch = detectSystemArch();
++        }
++        return systemArch;
++    }
++
++    private static String detectSystemArch() {
++        OperatingSystem os = getCurrentPlatform();
++        if (os == WINDOWS) {
++            String wow64Arch = System.getenv("PROCESSOR_ARCHITEW6432");
++            if (wow64Arch != null && !wow64Arch.isEmpty()) {
++                return normalizeArch(wow64Arch);
++            }
++            String arch = System.getenv("PROCESSOR_ARCHITECTURE");
++            if (arch != null && !arch.isEmpty()) {
++                return normalizeArch(arch);
++            }
++        } else {
++            try {
++                Process proc = Runtime.getRuntime().exec(new String[]{"uname", "-m"});
++                try (BufferedReader reader = new BufferedReader(new InputStreamReader(proc.getInputStream()))) {
++                    String line = reader.readLine();
++                    if (line != null && !line.trim().isEmpty()) {
++                        return normalizeArch(line.trim());
++                    }
++                }
++            } catch (IOException e) {
++                LOGGER.warn("Failed to detect system architecture via uname -m, falling back to os.arch", e);
++            }
++        }
++        return System.getProperty("os.arch");
++    }
++
++    private static String normalizeArch(String arch) {
++        switch (arch.toLowerCase(Locale.ROOT)) {
++            case "x86_64":
++            case "amd64":
++                return "amd64";
++            case "arm64":
++            case "aarch64":
++                return "aarch64";
++            case "x86":
++            case "i386":
++            case "i486":
++            case "i586":
++            case "i686":
++                return "x86";
++            default:
++                return arch.toLowerCase(Locale.ROOT);
++        }
++    }
++
+     public static void openLink(URI var0) {
+         try {
+             Class var1 = Class.forName("java.awt.Desktop");
+diff --git a/src/main/java/com/mojang/launcher/versions/CompatibilityRule.java b/src/main/java/com/mojang/launcher/versions/CompatibilityRule.java
+index 4e1d55e..83ef8d2 100644
+--- a/src/main/java/com/mojang/launcher/versions/CompatibilityRule.java
++++ b/src/main/java/com/mojang/launcher/versions/CompatibilityRule.java
+@@ -91,7 +91,7 @@ public class CompatibilityRule {
+                 if (this.arch != null) {
+                     try {
+                         var1 = Pattern.compile(this.arch);
+-                        var2 = var1.matcher(System.getProperty("os.arch"));
++                        var2 = var1.matcher(OperatingSystem.getSystemArch());       // olauncher - changes for https://github.com/RagedMeteor1837/olauncher/issues/7
+                         if (!var2.matches()) {
+                             return false;
+                         }
+diff --git a/src/main/java/dev/figboot/olauncher/launcher/runtime/JavaRuntimeManager.java b/src/main/java/dev/figboot/olauncher/launcher/runtime/JavaRuntimeManager.java
+index ec2e6a1..0233508 100644
+--- a/src/main/java/dev/figboot/olauncher/launcher/runtime/JavaRuntimeManager.java
++++ b/src/main/java/dev/figboot/olauncher/launcher/runtime/JavaRuntimeManager.java
+@@ -71,7 +71,7 @@ public class JavaRuntimeManager {
+                 .registerTypeAdapter(RuntimeFile.class, new RuntimeFileDeserializer())
+                 .create();
+ 
+-        jrePlatformName = findPlatformName(System.getProperty("os.arch").contains("64")); // FIXME: make accurate
++        jrePlatformName = findPlatformName();
+         platformDirectory = runtimesDirectory.resolve(jrePlatformName);
+         executorService = new ExceptionalThreadPoolExecutor(4, 8, 30L, TimeUnit.SECONDS);
+     }
+@@ -248,14 +248,16 @@ public class JavaRuntimeManager {
+         return job;
+     }
+ 
+-    private static String findPlatformName(boolean _64bit) {
++    private static String findPlatformName() {
++        String arch = OperatingSystem.getSystemArch();
++        boolean is64bit = arch.contains("64");
+         switch (OperatingSystem.getCurrentPlatform()) {
+             case WINDOWS:
+-                return _64bit ? "windows-x64" : "windows-x86";
++                return is64bit ? "windows-x64" : "windows-x86";
+             case OSX:
+                 return "mac-os";
+             case LINUX:
+-                return _64bit ? "linux" : "linux-i386"; // not technically correct
++                return is64bit ? "linux" : "linux-i386";
+             default:
+                 return "gamecore";
+         }
+diff --git a/src/main/java/net/minecraft/launcher/CompatibilityRule.java b/src/main/java/net/minecraft/launcher/CompatibilityRule.java
+index 52fe0e5..d547387 100644
+--- a/src/main/java/net/minecraft/launcher/CompatibilityRule.java
++++ b/src/main/java/net/minecraft/launcher/CompatibilityRule.java
+@@ -126,7 +126,7 @@ public class CompatibilityRule {
+                 if (this.arch != null) {
+                     try {
+                         var1 = Pattern.compile(this.arch);
+-                        var2 = var1.matcher(System.getProperty("os.arch"));
++                        var2 = var1.matcher(OperatingSystem.getSystemArch());     // olauncher - changes for https://github.com/RagedMeteor1837/olauncher/issues/7
+                         if (!var2.matches()) {
+                             return false;
+                         }
+diff --git a/src/main/java/net/minecraft/launcher/game/MinecraftGameRunner.java b/src/main/java/net/minecraft/launcher/game/MinecraftGameRunner.java
+index 38e6564..b5e9294 100644
+--- a/src/main/java/net/minecraft/launcher/game/MinecraftGameRunner.java
++++ b/src/main/java/net/minecraft/launcher/game/MinecraftGameRunner.java
+@@ -177,8 +177,8 @@ public class MinecraftGameRunner extends AbstractGameRunner implements GameProce
+             String[] baseArgs;
+             if (var5 != null) {
+                 baseArgs = Arrays.stream(var5.split(" ")).filter(s -> !s.isEmpty()).toArray(String[]::new);
+-            } else {
+-                boolean var6 = "32".equals(System.getProperty("sun.arch.data.model"));
++            } else {     // olauncher - changes for https://github.com/RagedMeteor1837/olauncher/issues/7
++                boolean var6 = !OperatingSystem.getSystemArch().contains("64"); 
+                 String var7 = var6 ? Profile.DEFAULT_JRE_ARGUMENTS_32BIT : Profile.DEFAULT_JRE_ARGUMENTS_64BIT;
+                 baseArgs = var7.split(" ");
+             }
+diff --git a/src/main/java/net/minecraft/launcher/updater/Library.java b/src/main/java/net/minecraft/launcher/updater/Library.java
+index 743f4f0..890e4eb 100644
+--- a/src/main/java/net/minecraft/launcher/updater/Library.java
++++ b/src/main/java/net/minecraft/launcher/updater/Library.java
+@@ -25,7 +25,7 @@ import org.apache.commons.lang3.text.StrSubstitutor;
+ public class Library {
+     private static final StrSubstitutor SUBSTITUTOR = new StrSubstitutor(new HashMap<String, String>() {
+         {
+-            this.put("arch", System.getProperty("os.arch").contains("64") ? "64" : "32");
++            this.put("arch", OperatingSystem.getSystemArch().contains("64") ? "64" : "32");     // olauncher - changes for https://github.com/RagedMeteor1837/olauncher/issues/7
+         }
+     });
+     private String name;
+-- 
+2.53.0
+
