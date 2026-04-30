@@ -114,7 +114,12 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           ARTIFACT_PATH: ${{ steps.download-artifact.outputs.download-path }}
-        run: gh release create "$RELEASE_TAG" --draft --verify-tag --title "$RELEASE_TAG" "$ARTIFACT_PATH"/*.jar
+        run: |
+          REDIST_SHA256=$(sha256sum "$ARTIFACT_PATH"/*.jar | awk '{print $1}')
+          NOTES="redist-sha256: $REDIST_SHA256"
+          gh release create "$RELEASE_TAG" --draft --verify-tag --title "$RELEASE_TAG" \
+            --notes "$NOTES" \
+            "$ARTIFACT_PATH"/*.jar
 
   dev-release:
     if: ${{ github.ref == 'refs/heads/dev' }}
@@ -138,7 +143,8 @@ jobs:
           ARTIFACT_PATH: ${{ steps.download-artifact.outputs.download-path }}
           COMMIT_SHA: ${{ github.sha }}
         run: |
-          NOTES=$(printf '(build-sha: %s)' "$COMMIT_SHA")
+          REDIST_SHA256=$(sha256sum "$ARTIFACT_PATH"/*.jar | awk '{print $1}')
+          NOTES=$(printf 'build-sha: %s\nredist-sha256: %s' "$COMMIT_SHA" "$REDIST_SHA256")
           gh release create "$DEV_TAG" \
             --draft \
             --prerelease \
