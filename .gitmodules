@@ -1,3 +1,4 @@
 [submodule "AutoOL"]
 	path = AutoOL
 	url = https://github.com/RagedMeteor1837/AutoOL.git
+	branch = master
