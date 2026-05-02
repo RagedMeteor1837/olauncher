@@ -47,3 +47,13 @@ These commands must be run in the following order to build from source:
   - Provides maintenance utilities for the launcher build.
 - `rebuildPatches.sh`
   - Regenerates patch files by cleaning and updating them against the current repository state.
+
+---
+
+## License
+
+Copyright (C) 2025 RagedMeteor1837
+
+This project is licensed under the GNU General Public License v3.0 — see the [LICENSE](LICENSE) file for details.
+
+This project is a fork of [olauncher/olauncher](https://github.com/olauncher/olauncher), which was originally licensed under GNU GPL v3, then relicensed to CC0 1.0 Universal. New contributions in this fork are licensed under GNU GPL v3.
