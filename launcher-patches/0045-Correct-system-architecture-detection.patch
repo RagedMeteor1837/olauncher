@@ -1,4 +1,4 @@
-From a4dd505d1a0d0b65a264bc3f0a3b920ae62faf93 Mon Sep 17 00:00:00 2001
+From 677c9e0dc775e5fe8fb0eae737a42877c909df2c Mon Sep 17 00:00:00 2001
 From: RagedMeteor1837 <148640131+RagedMeteor1837@users.noreply.github.com>
 Date: Thu, 30 Apr 2026 17:50:56 +0100
 Subject: [PATCH] Correct system architecture detection
@@ -103,7 +103,7 @@ index 4e1d55e..83ef8d2 100644
                              return false;
                          }
 diff --git a/src/main/java/dev/figboot/olauncher/launcher/runtime/JavaRuntimeManager.java b/src/main/java/dev/figboot/olauncher/launcher/runtime/JavaRuntimeManager.java
-index ec2e6a1..0233508 100644
+index 7270683..0cf0f62 100644
 --- a/src/main/java/dev/figboot/olauncher/launcher/runtime/JavaRuntimeManager.java
 +++ b/src/main/java/dev/figboot/olauncher/launcher/runtime/JavaRuntimeManager.java
 @@ -71,7 +71,7 @@ public class JavaRuntimeManager {
@@ -115,7 +115,7 @@ index ec2e6a1..0233508 100644
          platformDirectory = runtimesDirectory.resolve(jrePlatformName);
          executorService = new ExceptionalThreadPoolExecutor(4, 8, 30L, TimeUnit.SECONDS);
      }
-@@ -248,14 +248,16 @@ public class JavaRuntimeManager {
+@@ -245,14 +245,16 @@ public class JavaRuntimeManager {
          return job;
      }
  

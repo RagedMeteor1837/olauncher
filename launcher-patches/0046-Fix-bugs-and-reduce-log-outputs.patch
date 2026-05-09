@@ -1,4 +1,4 @@
-From 644eb6f8e28a3e37ec4f6de11a0e70ac9bd8f81d Mon Sep 17 00:00:00 2001
+From 7489373a59c8e4a15a974894c9727e02e818c311 Mon Sep 17 00:00:00 2001
 From: RagedMeteor1837 <148640131+RagedMeteor1837@users.noreply.github.com>
 Date: Sat, 2 May 2026 18:15:40 +0100
 Subject: [PATCH] Fix bugs and reduce log outputs
@@ -60,20 +60,8 @@ index 20ebcf0..9fe0356 100644
                  } catch (Throwable var3) {
                      LOGGER.warn("Couldn't download " + var1.getUrl() + " for job '" + this.name + "'", var3);
                      var1.getMonitor().setCurrent(var1.getMonitor().getTotal());
-diff --git a/src/main/java/dev/figboot/olauncher/OLauncherConstants.java b/src/main/java/dev/figboot/olauncher/OLauncherConstants.java
-index 7a1909a..c1ae8d0 100644
---- a/src/main/java/dev/figboot/olauncher/OLauncherConstants.java
-+++ b/src/main/java/dev/figboot/olauncher/OLauncherConstants.java
-@@ -13,6 +13,7 @@ public final class OLauncherConstants {
-     public static final String APP_SCOPES = "XboxLive.signin offline_access";
-     public static final int REDIR_URI_PORT = 6183;
-     public static final String REDIR_URI = "http://localhost:" + REDIR_URI_PORT;
-+    public static final String AUTH_CODE_URL = "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize";
- 
-     public static final URL JRE_MANIFEST_URL = constantURL("https://launchermeta.mojang.com/v1/products/java-runtime/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json");
- }
 diff --git a/src/main/java/dev/figboot/olauncher/auth/MSLoginServer.java b/src/main/java/dev/figboot/olauncher/auth/MSLoginServer.java
-index bb9cb51..2659aaa 100644
+index ada5ca8..7a958da 100644
 --- a/src/main/java/dev/figboot/olauncher/auth/MSLoginServer.java
 +++ b/src/main/java/dev/figboot/olauncher/auth/MSLoginServer.java
 @@ -3,6 +3,7 @@ package dev.figboot.olauncher.auth;
@@ -84,7 +72,7 @@ index bb9cb51..2659aaa 100644
  import org.apache.logging.log4j.LogManager;
  import org.apache.logging.log4j.Logger;
  
-@@ -98,9 +99,12 @@ public class MSLoginServer {
+@@ -99,9 +100,12 @@ public class MSLoginServer {
          serverThread.join(timeout);
      }
  
@@ -100,49 +88,7 @@ index bb9cb51..2659aaa 100644
      private void handle() throws Exception {
          synchronized (stateVarLock) {
              running = true;
-@@ -118,11 +122,36 @@ public class MSLoginServer {
-             try (InputStream is = client.getInputStream()) {
-                 BufferedReader br = new BufferedReader(new InputStreamReader(is));
-                 String line;
--                Matcher matcher;
--                while ((line = br.readLine()) != null) {
--                    if ((matcher = GET_RQ_PATTERN.matcher(line)).matches()) {
--                        String code = matcher.group(1);
--                        LOGGER.info("GET request received (/)");
-+                line = br.readLine();
-+                if (line == null) continue;
-+
-+                Matcher reqMatcher = GET_REQUEST_LINE.matcher(line);
-+                if (!reqMatcher.matches()) continue;
-+
-+                String path = reqMatcher.group(1);
-+
-+                if (path.startsWith("/authComplete")) {
-+                    LOGGER.info("GET request received (/authComplete)");
-+                    String content = "The code has been received. You may now close this window.";
-+                    byte[] contentBytes = content.getBytes(StandardCharsets.UTF_8);
-+                    client.getOutputStream().write("HTTP/1.1 200 OK\r\n".getBytes(StandardCharsets.UTF_8));
-+                    client.getOutputStream().write("Content-type: text/plain\r\n".getBytes(StandardCharsets.UTF_8));
-+                    client.getOutputStream().write(("Content-length: " + contentBytes.length + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
-+                    client.getOutputStream().write(contentBytes);
-+
-+                    synchronized (stateVarLock) { stop = true; }
-+                    synchronized (handlerSync) {
-+                        if (!handlerCalled) handleComplete.accept(new Response(null, null, null));
-+                        handlerCalled = true;
-+                    }
-+
-+                } else {
-+                    Matcher codeMatcher  = QUERY_CODE.matcher(path);
-+                    Matcher errorMatcher = QUERY_ERROR.matcher(path);
-+
-+                    if (codeMatcher.find()) {
-+                        String code = URLDecoder.decode(codeMatcher.group(1), "UTF-8");
-+                        LOGGER.info("GET request received (/) - code obtained");
-                         client.getOutputStream().write("HTTP/1.1 301 Moved Permanently\r\n".getBytes(StandardCharsets.UTF_8));
-                         client.getOutputStream().write("Location: /authComplete\r\n\r\n".getBytes(StandardCharsets.UTF_8));
- 
-@@ -131,11 +160,12 @@ public class MSLoginServer {
+@@ -158,11 +162,12 @@ public class MSLoginServer {
                              handlerCalled = true;
                          }
  
@@ -159,9 +105,9 @@ index bb9cb51..2659aaa 100644
  
                          String content = "The authorization has been cancelled. You may now close this window.";
                          byte[] contentBytes = content.getBytes(StandardCharsets.UTF_8);
-@@ -144,36 +174,14 @@ public class MSLoginServer {
-                         client.getOutputStream().write(("Content-length: " + contentBytes.length + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
-                         client.getOutputStream().write(contentBytes);
+@@ -171,35 +176,12 @@ public class MSLoginServer {
+                         out.write(("Content-length: " + contentBytes.length + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+                         out.write(contentBytes);
  
 -                        synchronized (stateVarLock) {
 -                            stop = true;
@@ -194,11 +140,9 @@ index bb9cb51..2659aaa 100644
 -
 -                        break;
                      } else {
-+                        LOGGER.warn("Unrecognised GET path: {}", path);
-                         client.getOutputStream().write("HTTP/1.1 404 Not Found\r\n\r\n".getBytes(StandardCharsets.UTF_8));
-                     }
-                 }
-@@ -187,6 +195,7 @@ public class MSLoginServer {
+                         LOGGER.warn("Unrecognised GET path: {}", path);
+                         out.write("HTTP/1.1 404 Not Found\r\n\r\n".getBytes(StandardCharsets.UTF_8));
+@@ -215,6 +197,7 @@ public class MSLoginServer {
          private final String code;
          private final String error;
          private final String errorDesc;
@@ -206,23 +150,11 @@ index bb9cb51..2659aaa 100644
  
          public boolean isSuccess() {
              return code != null;
-diff --git a/src/main/java/dev/figboot/olauncher/auth/MicrosoftAuthenticationService.java b/src/main/java/dev/figboot/olauncher/auth/MicrosoftAuthenticationService.java
-index 4576fea..6ffdf9f 100644
---- a/src/main/java/dev/figboot/olauncher/auth/MicrosoftAuthenticationService.java
-+++ b/src/main/java/dev/figboot/olauncher/auth/MicrosoftAuthenticationService.java
-@@ -37,6 +37,7 @@ public class MicrosoftAuthenticationService extends YggdrasilAuthenticationServi
- 
-     public static final URL DEVICE_CODE_URL = constantURL("https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode");
-     public static final URL DEVICE_CODE_HEARTBEAT_URL = constantURL("https://login.microsoftonline.com/consumers/oauth2/v2.0/token");
-+    public static final URL ROUTE_MS_TOKEN = DEVICE_CODE_HEARTBEAT_URL;
-     public static final URL ENTITLEMENTS_URL = constantURL("https://api.minecraftservices.com/entitlements");
- 
-     private final Gson gson;
 diff --git a/src/main/java/dev/figboot/olauncher/auth/MicrosoftUserAuthentication.java b/src/main/java/dev/figboot/olauncher/auth/MicrosoftUserAuthentication.java
-index c8b0326..7c757d4 100644
+index 9b1c67e..1ec8288 100644
 --- a/src/main/java/dev/figboot/olauncher/auth/MicrosoftUserAuthentication.java
 +++ b/src/main/java/dev/figboot/olauncher/auth/MicrosoftUserAuthentication.java
-@@ -102,6 +102,7 @@ public class MicrosoftUserAuthentication extends HttpUserAuthentication {
+@@ -77,6 +77,7 @@ public class MicrosoftUserAuthentication extends HttpUserAuthentication {
          }
  
          String msAuthCode = msLoginRes == null ? null : this.msLoginRes.getCode();
@@ -230,7 +162,7 @@ index c8b0326..7c757d4 100644
          this.msLoginRes = null;
  
          Instant later = Instant.now().plus(6, ChronoUnit.HOURS);
-@@ -118,7 +119,7 @@ public class MicrosoftUserAuthentication extends HttpUserAuthentication {
+@@ -93,7 +94,7 @@ public class MicrosoftUserAuthentication extends HttpUserAuthentication {
              xstsAndMinecraftLogIn(hash);
              profileLogIn();
          } else if (msAuthCode != null) {
@@ -239,7 +171,7 @@ index c8b0326..7c757d4 100644
              xstsAndMinecraftLogIn(hash);
              profileLogIn();
          } else if (xuid != null) {
-@@ -152,17 +153,18 @@ public class MicrosoftUserAuthentication extends HttpUserAuthentication {
+@@ -122,8 +123,8 @@ public class MicrosoftUserAuthentication extends HttpUserAuthentication {
          }
      }
  
@@ -250,10 +182,7 @@ index c8b0326..7c757d4 100644
          MSTokenAuthResponse tokAuthRes;
  
          try {
--            tokAuthRes = getAuthenticationService().postForm(MicrosoftAuthenticationService.ROUTE_LOGIN_LIVE_TOKEN,
-+            tokAuthRes = getAuthenticationService().postForm(MicrosoftAuthenticationService.ROUTE_MS_TOKEN,
-                     form -> {
-                         form.append("client_id", OLauncherConstants.APP_CLIENT_ID.toString());
+@@ -133,6 +134,7 @@ public class MicrosoftUserAuthentication extends HttpUserAuthentication {
                          form.append("code", msAuthCode);
                          form.append("grant_type", "authorization_code");
                          form.append("redirect_uri", OLauncherConstants.REDIR_URI);
@@ -261,7 +190,7 @@ index c8b0326..7c757d4 100644
                      }, MSTokenAuthResponse.class);
          } catch (ResponseCodeException ex) {
              MSResponse res = ex.getResponse();
-@@ -175,11 +177,11 @@ public class MicrosoftUserAuthentication extends HttpUserAuthentication {
+@@ -145,7 +147,7 @@ public class MicrosoftUserAuthentication extends HttpUserAuthentication {
      }
  
      private String msAndXblWarmLogIn() throws AuthenticationException {
@@ -270,11 +199,6 @@ index c8b0326..7c757d4 100644
          MSTokenAuthResponse tokAuthRes;
  
          try {
--            tokAuthRes = getAuthenticationService().postForm(MicrosoftAuthenticationService.ROUTE_LOGIN_LIVE_TOKEN,
-+            tokAuthRes = getAuthenticationService().postForm(MicrosoftAuthenticationService.ROUTE_MS_TOKEN,
-                     form -> {
-                         form.append("client_id", OLauncherConstants.APP_CLIENT_ID.toString());
-                         form.append("refresh_token", msRefreshToken);
 diff --git a/src/main/java/dev/figboot/olauncher/auth/ui/MSLoginDialog.java b/src/main/java/dev/figboot/olauncher/auth/ui/MSLoginDialog.java
 index f37edf7..1a61d6c 100644
 --- a/src/main/java/dev/figboot/olauncher/auth/ui/MSLoginDialog.java

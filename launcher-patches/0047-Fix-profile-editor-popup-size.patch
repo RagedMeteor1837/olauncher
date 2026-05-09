@@ -1,0 +1,61 @@
+From d5df55bb8aaaaccc3db7e1f6f347d0c8f543310c Mon Sep 17 00:00:00 2001
+From: RagedMeteor1837 <148640131+RagedMeteor1837@users.noreply.github.com>
+Date: Sat, 9 May 2026 22:19:07 +0100
+Subject: [PATCH] Fix profile editor popup size
+
+
+diff --git a/src/main/java/net/minecraft/launcher/ui/popups/profile/ProfileEditorPopup.java b/src/main/java/net/minecraft/launcher/ui/popups/profile/ProfileEditorPopup.java
+index 1f46772..de48d70 100644
+--- a/src/main/java/net/minecraft/launcher/ui/popups/profile/ProfileEditorPopup.java
++++ b/src/main/java/net/minecraft/launcher/ui/popups/profile/ProfileEditorPopup.java
+@@ -2,6 +2,7 @@ package net.minecraft.launcher.ui.popups.profile;
+ 
+ import com.mojang.launcher.OperatingSystem;
+ import java.awt.BorderLayout;
++import java.awt.Dimension;
+ import java.awt.Window;
+ import java.awt.event.ActionEvent;
+ import java.awt.event.ActionListener;
+@@ -116,6 +117,7 @@ public class ProfileEditorPopup extends JPanel implements ActionListener {
+         ProfileEditorPopup var4 = new ProfileEditorPopup(var0, var1);
+         var3.add(var4);
+         var3.pack();
++        var3.setSize(new Dimension(Math.min(var3.getWidth(), 600), var3.getHeight()));
+         var3.setLocationRelativeTo(var2);
+         var3.setVisible(true);
+     }
+diff --git a/src/main/java/net/minecraft/launcher/ui/popups/profile/ProfileJavaPanel.java b/src/main/java/net/minecraft/launcher/ui/popups/profile/ProfileJavaPanel.java
+index 3f14f16..fd3043f 100644
+--- a/src/main/java/net/minecraft/launcher/ui/popups/profile/ProfileJavaPanel.java
++++ b/src/main/java/net/minecraft/launcher/ui/popups/profile/ProfileJavaPanel.java
+@@ -18,9 +18,9 @@ import javax.swing.event.DocumentListener;
+ public class ProfileJavaPanel extends JPanel {
+     private final ProfileEditorPopup editor;
+     private final JCheckBox javaPathCustom = new JCheckBox("Executable:");
+-    private final JTextField javaPathField = new JTextField();
++    private final JTextField javaPathField = new JTextField(90); // olaucher - fix for https://github.com/RagedMeteor1837/olauncher/issues/15
+     private final JCheckBox javaArgsCustom = new JCheckBox("Arguments:");
+-    private final JTextField javaArgsField = new JTextField();
++    private final JTextField javaArgsField = new JTextField(90);
+ 
+     private String javaPath; // olauncher - bundled java runtime UI
+ 
+@@ -67,6 +67,7 @@ public class ProfileJavaPanel extends JPanel {
+             //this.javaPathField.setText(OperatingSystem.getCurrentPlatform().getJavaDir()); // olauncher - bundled java runtime UI
+             this.javaPathField.setText("Use bundled runtime");
+         }
++        this.javaPathField.setCaretPosition(0);
+ 
+         this.updateJavaPathState();
+         String var2 = this.editor.getProfile().getJavaArgs();
+@@ -77,6 +78,7 @@ public class ProfileJavaPanel extends JPanel {
+             this.javaArgsCustom.setSelected(false);
+             this.javaArgsField.setText(Profile.DEFAULT_JRE_ARGUMENTS_64BIT); // olauncher - use default JVM argument variable
+         }
++        this.javaArgsField.setCaretPosition(0);
+ 
+         this.updateJavaArgsState();
+     }
+-- 
+2.53.0
+

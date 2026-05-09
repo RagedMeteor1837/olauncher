@@ -1,0 +1,215 @@
+From f54300abdfa07768b8bbe5621abdd58037f0c385 Mon Sep 17 00:00:00 2001
+From: RagedMeteor1837 <148640131+RagedMeteor1837@users.noreply.github.com>
+Date: Sat, 9 May 2026 23:43:30 +0100
+Subject: [PATCH] Launcher optimisations
+
+
+diff --git a/src/main/java/net/minecraft/launcher/Launcher.java b/src/main/java/net/minecraft/launcher/Launcher.java
+index 9ccae09..2add780 100644
+--- a/src/main/java/net/minecraft/launcher/Launcher.java
++++ b/src/main/java/net/minecraft/launcher/Launcher.java
+@@ -121,20 +121,19 @@ public class Launcher {
+             this.launcher = new com.mojang.launcher.Launcher(this.userInterface, var2, var3, var4, new MinecraftVersionManager(new LocalVersionList(var2), new RemoteVersionList(LauncherConstants.PROPERTIES.getVersionManifest(), var3, this)), Agent.MINECRAFT, MinecraftReleaseTypeFactory.instance(), 21);
+             this.profileManager = new ProfileManager(this);
+ 
+-            // load update checker before the frame so AboutTab can reference it
++            // Create update checker before the frame so AboutTab can reference the instance
+             this.updateChecker = new LauncherUpdateChecker();
++
++            ((SwingUserInterface)this.userInterface).initializeFrame();
++            refreshJavaRuntimes(); // olauncher - refresh java runtimes
++            this.refreshVersionsAndProfiles();
++
+             try {
+                 this.updateChecker.loadInfo();
+             } catch (IOException ex) {
+                 LOGGER.error("Error loading update checker state. Update checking will not continue.", ex);
+                 this.updateChecker = null;
+             }
+-
+-            ((SwingUserInterface)this.userInterface).initializeFrame();
+-            refreshJavaRuntimes(); // olauncher - refresh java runtimes
+-            this.refreshVersionsAndProfiles();
+-
+-            // trigger update check after frame is ready
+             if (this.updateChecker != null) {
+                 try {
+                     this.updateChecker.updateCheck();
+@@ -215,14 +214,10 @@ public class Launcher {
+     // olauncher end
+ 
+     public void refreshVersionsAndProfiles() {
++        // Profile load has no dependency on the remote version list — submit it first so the
++        // user is authenticated and sees their profile while the network fetch is in progress.
+         this.getLauncher().getVersionManager().getExecutorService().submit(new Runnable() {
+             public void run() {
+-                try {
+-                    Launcher.this.getLauncher().getVersionManager().refreshVersions();
+-                } catch (Throwable var7) {
+-                    Launcher.LOGGER.error("Unexpected exception refreshing version list", var7);
+-                }
+-
+                 try {
+                     Launcher.this.profileManager.loadProfiles();
+                     Launcher.LOGGER.info("Loaded " + Launcher.this.profileManager.getProfiles().size() + " instance(s); selected '" + Launcher.this.profileManager.getSelectedProfile().getName() + "'");
+@@ -257,6 +252,16 @@ public class Launcher {
+                 Launcher.this.ensureLoggedIn();
+             }
+         });
++
++        this.getLauncher().getVersionManager().getExecutorService().submit(new Runnable() {
++            public void run() {
++                try {
++                    Launcher.this.getLauncher().getVersionManager().refreshVersions();
++                } catch (Throwable var1) {
++                    Launcher.LOGGER.error("Unexpected exception refreshing version list", var1);
++                }
++            }
++        });
+     }
+ 
+     private MinecraftUserInterface selectUserInterface(JFrame var1) {
+@@ -299,6 +304,9 @@ public class Launcher {
+                 this.getUserInterface().showLoginPrompt();
+             }
+         } else if (!var1.canPlayOnline()) {
++            // Show cached profile state immediately so the UI is populated while the token refresh
++            // is in progress. A second fireRefreshEvent() after logIn() updates to online state.
++            this.profileManager.fireRefreshEvent();
+             try {
+                 LOGGER.info("Refreshing auth...");
+                 var1.logIn();
+diff --git a/src/main/java/net/minecraft/launcher/Main.java b/src/main/java/net/minecraft/launcher/Main.java
+index 6c046c0..a23c86f 100644
+--- a/src/main/java/net/minecraft/launcher/Main.java
++++ b/src/main/java/net/minecraft/launcher/Main.java
+@@ -97,7 +97,6 @@ public class Main {
+             var16.setWinTenHack();
+         }
+ 
+-        var12.setLocationRelativeTo((Component)null);
+         LOGGER.debug("End of main.");
+     }
+ 
+diff --git a/src/main/java/net/minecraft/launcher/SwingUserInterface.java b/src/main/java/net/minecraft/launcher/SwingUserInterface.java
+index 7f87914..2a380b4 100644
+--- a/src/main/java/net/minecraft/launcher/SwingUserInterface.java
++++ b/src/main/java/net/minecraft/launcher/SwingUserInterface.java
+@@ -7,19 +7,16 @@ import com.mojang.launcher.OperatingSystem;
+ import com.mojang.launcher.events.GameOutputLogProcessor;
+ import com.mojang.launcher.updater.DownloadProgress;
+ import com.mojang.launcher.versions.CompleteVersion;
+-import java.awt.Dimension;
+ import java.awt.event.WindowAdapter;
+ import java.awt.event.WindowEvent;
+ import java.io.File;
+ import java.io.IOException;
+-import java.io.InputStream;
+ import java.net.URI;
+ import java.net.URISyntaxException;
+ import java.util.Timer;
+ import java.util.TimerTask;
+ import java.util.UUID;
+ import java.util.concurrent.TimeUnit;
+-import javax.imageio.ImageIO;
+ import javax.swing.BorderFactory;
+ import javax.swing.Icon;
+ import javax.swing.JFrame;
+@@ -56,36 +53,31 @@ public class SwingUserInterface implements MinecraftUserInterface {
+     }
+ 
+     private static void setLookAndFeel() {
+-        JFrame var0 = new JFrame();
+-
+         try {
+             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+-        } catch (Throwable var7) {
++        } catch (Throwable var1) {
+             try {
+                 LOGGER.error("Your java failed to provide normal look and feel, trying the old fallback now");
+                 UIManager.setLookAndFeel(UIManager.getCrossPlatformLookAndFeelClassName());
+-            } catch (Throwable var6) {
+-                LOGGER.error("Unexpected exception setting look and feel", var6);
++            } catch (Throwable var2) {
++                LOGGER.error("Unexpected exception setting look and feel", var2);
+             }
+         }
+ 
+-        JPanel var1 = new JPanel();
+-        var1.setBorder(BorderFactory.createTitledBorder("test"));
+-        var0.add(var1);
+-
++        // Probe for broken themes without creating a native window — getPreferredSize() exercises
++        // the same L&F rendering code paths (border painting, font metrics) as a pack() would.
+         try {
+-            var0.pack();
+-        } catch (Throwable var5) {
++            JPanel probe = new JPanel();
++            probe.setBorder(BorderFactory.createTitledBorder("test"));
++            probe.getPreferredSize();
++        } catch (Throwable var3) {
+             LOGGER.error("Custom (broken) theme detected, falling back onto x-platform theme");
+-
+             try {
+                 UIManager.setLookAndFeel(UIManager.getCrossPlatformLookAndFeelClassName());
+             } catch (Throwable var4) {
+                 LOGGER.error("Unexpected exception setting look and feel", var4);
+             }
+         }
+-
+-        var0.dispose();
+     }
+ 
+     public void showLoginPrompt(final Launcher var1, final LogInPopup.Callback var2) {
+@@ -99,8 +91,6 @@ public class SwingUserInterface implements MinecraftUserInterface {
+ 
+     public void initializeFrame() {
+         this.frame.getContentPane().removeAll();
+-        this.frame.setTitle(WINDOW_TITLE == null ? LauncherVersion.getLauncherName() + " " + LauncherVersion.getVersion() + LauncherConstants.PROPERTIES.getEnvironment().getTitle() : WINDOW_TITLE); // olauncher - update version
+-        this.frame.setPreferredSize(new Dimension(900, 580));
+         this.frame.setDefaultCloseOperation(2);
+         this.frame.addWindowListener(new WindowAdapter() {
+             public void windowClosing(WindowEvent var1) {
+@@ -124,14 +114,6 @@ public class SwingUserInterface implements MinecraftUserInterface {
+             }
+         });
+ 
+-        try {
+-            InputStream var1 = Launcher.class.getResourceAsStream("/favicon.png");
+-            if (var1 != null) {
+-                this.frame.setIconImage(ImageIO.read(var1));
+-            }
+-        } catch (IOException var2) {
+-        }
+-
+         this.launcherPanel = new LauncherPanel(this.minecraftLauncher);
+         SwingUtilities.invokeLater(new Runnable() {
+             public void run() {
+diff --git a/src/main/java/net/minecraft/launcher/updater/LocalVersionList.java b/src/main/java/net/minecraft/launcher/updater/LocalVersionList.java
+index f7e0b56..5ef9270 100644
+--- a/src/main/java/net/minecraft/launcher/updater/LocalVersionList.java
++++ b/src/main/java/net/minecraft/launcher/updater/LocalVersionList.java
+@@ -25,10 +25,6 @@ public class LocalVersionList extends FileBasedVersionList {
+         if (var1 != null && var1.isDirectory()) {
+             this.baseDirectory = var1;
+             this.baseVersionsDir = new File(this.baseDirectory, "versions");
+-            if (!this.baseVersionsDir.isDirectory()) {
+-                this.baseVersionsDir.mkdirs();
+-            }
+-
+         } else {
+             throw new IllegalArgumentException("Base directory is not a folder!");
+         }
+@@ -39,6 +35,9 @@ public class LocalVersionList extends FileBasedVersionList {
+     }
+ 
+     public void refreshVersions() throws IOException {
++        if (!this.baseVersionsDir.isDirectory()) {
++            this.baseVersionsDir.mkdirs();
++        }
+         this.clearCache();
+         File[] var1 = this.baseVersionsDir.listFiles();
+         if (var1 != null) {
+-- 
+2.53.0
+
