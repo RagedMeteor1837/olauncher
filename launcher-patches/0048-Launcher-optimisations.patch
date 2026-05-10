@@ -1,4 +1,4 @@
-From 4c610fd99cfab141a208318e80cc7125f5f452a0 Mon Sep 17 00:00:00 2001
+From f9559d45974a459e7639d0a5840dd23f66e7482b Mon Sep 17 00:00:00 2001
 From: RagedMeteor1837 <148640131+RagedMeteor1837@users.noreply.github.com>
 Date: Sat, 9 May 2026 23:43:30 +0100
 Subject: [PATCH] Launcher optimisations
@@ -296,7 +296,7 @@ index a9d52eb..5ed9944 100644
      }
  
 diff --git a/src/main/java/net/minecraft/launcher/Launcher.java b/src/main/java/net/minecraft/launcher/Launcher.java
-index 9ccae09..ca3065b 100644
+index 9ccae09..905bb9e 100644
 --- a/src/main/java/net/minecraft/launcher/Launcher.java
 +++ b/src/main/java/net/minecraft/launcher/Launcher.java
 @@ -70,7 +70,7 @@ import org.apache.logging.log4j.LogManager;
@@ -335,12 +335,13 @@ index 9ccae09..ca3065b 100644
              if (this.updateChecker != null) {
                  try {
                      this.updateChecker.updateCheck();
-@@ -215,14 +214,10 @@ public class Launcher {
-     // olauncher end
+@@ -212,17 +211,10 @@ public class Launcher {
+             }
+         });
+     }
+-    // olauncher end
  
      public void refreshVersionsAndProfiles() {
-+        // Profile load has no dependency on the remote version list — submit it first so the
-+        // user is authenticated and sees their profile while the network fetch is in progress.
          this.getLauncher().getVersionManager().getExecutorService().submit(new Runnable() {
              public void run() {
 -                try {
@@ -352,7 +353,7 @@ index 9ccae09..ca3065b 100644
                  try {
                      Launcher.this.profileManager.loadProfiles();
                      Launcher.LOGGER.info("Loaded " + Launcher.this.profileManager.getProfiles().size() + " instance(s); selected '" + Launcher.this.profileManager.getSelectedProfile().getName() + "'");
-@@ -257,6 +252,16 @@ public class Launcher {
+@@ -257,6 +249,16 @@ public class Launcher {
                  Launcher.this.ensureLoggedIn();
              }
          });
@@ -369,12 +370,10 @@ index 9ccae09..ca3065b 100644
      }
  
      private MinecraftUserInterface selectUserInterface(JFrame var1) {
-@@ -299,6 +304,9 @@ public class Launcher {
+@@ -299,6 +301,7 @@ public class Launcher {
                  this.getUserInterface().showLoginPrompt();
              }
          } else if (!var1.canPlayOnline()) {
-+            // Show cached profile state immediately so the UI is populated while the token refresh
-+            // is in progress. A second fireRefreshEvent() after logIn() updates to online state.
 +            this.profileManager.fireRefreshEvent();
              try {
                  LOGGER.info("Refreshing auth...");
@@ -392,7 +391,7 @@ index 6c046c0..a23c86f 100644
      }
  
 diff --git a/src/main/java/net/minecraft/launcher/SwingUserInterface.java b/src/main/java/net/minecraft/launcher/SwingUserInterface.java
-index 7f87914..2a380b4 100644
+index 7f87914..4923796 100644
 --- a/src/main/java/net/minecraft/launcher/SwingUserInterface.java
 +++ b/src/main/java/net/minecraft/launcher/SwingUserInterface.java
 @@ -7,19 +7,16 @@ import com.mojang.launcher.OperatingSystem;
@@ -415,7 +414,7 @@ index 7f87914..2a380b4 100644
  import javax.swing.BorderFactory;
  import javax.swing.Icon;
  import javax.swing.JFrame;
-@@ -56,36 +53,31 @@ public class SwingUserInterface implements MinecraftUserInterface {
+@@ -56,36 +53,29 @@ public class SwingUserInterface implements MinecraftUserInterface {
      }
  
      private static void setLookAndFeel() {
@@ -439,8 +438,6 @@ index 7f87914..2a380b4 100644
 -        var1.setBorder(BorderFactory.createTitledBorder("test"));
 -        var0.add(var1);
 -
-+        // Probe for broken themes without creating a native window — getPreferredSize() exercises
-+        // the same L&F rendering code paths (border painting, font metrics) as a pack() would.
          try {
 -            var0.pack();
 -        } catch (Throwable var5) {
@@ -461,7 +458,7 @@ index 7f87914..2a380b4 100644
      }
  
      public void showLoginPrompt(final Launcher var1, final LogInPopup.Callback var2) {
-@@ -99,8 +91,6 @@ public class SwingUserInterface implements MinecraftUserInterface {
+@@ -99,8 +89,6 @@ public class SwingUserInterface implements MinecraftUserInterface {
  
      public void initializeFrame() {
          this.frame.getContentPane().removeAll();
@@ -470,7 +467,7 @@ index 7f87914..2a380b4 100644
          this.frame.setDefaultCloseOperation(2);
          this.frame.addWindowListener(new WindowAdapter() {
              public void windowClosing(WindowEvent var1) {
-@@ -124,14 +114,6 @@ public class SwingUserInterface implements MinecraftUserInterface {
+@@ -124,14 +112,6 @@ public class SwingUserInterface implements MinecraftUserInterface {
              }
          });
  
