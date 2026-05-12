@@ -1,4 +1,4 @@
-From 56710e9cb0a9807a20093ce1bbba68480dc8b8d5 Mon Sep 17 00:00:00 2001
+From 86428ae22ca6a3c6db0995421af4db69eac3f059 Mon Sep 17 00:00:00 2001
 From: RagedMeteor1837 <148640131+RagedMeteor1837@users.noreply.github.com>
 Date: Sun, 29 Mar 2026 20:34:46 +0100
 Subject: [PATCH] Update channels & checking changes
@@ -479,10 +479,10 @@ index ec2e6a1..7270683 100644
          job.addDownloadables(downloadables);
 diff --git a/src/main/java/dev/figboot/olauncher/launcher/update/LauncherSelfUpdater.java b/src/main/java/dev/figboot/olauncher/launcher/update/LauncherSelfUpdater.java
 new file mode 100644
-index 0000000..04d3288
+index 0000000..bf8ad76
 --- /dev/null
 +++ b/src/main/java/dev/figboot/olauncher/launcher/update/LauncherSelfUpdater.java
-@@ -0,0 +1,270 @@
+@@ -0,0 +1,296 @@
 +// LauncherSelfUpdater.java
 +
 +package dev.figboot.olauncher.launcher.update;
@@ -514,6 +514,10 @@ index 0000000..04d3288
 +
 +public class LauncherSelfUpdater {
 +    private static final Logger LOGGER = LogManager.getLogger();
++
++    private static final List<String> JVM_INTERNAL_PREFIXES = Arrays.asList(
++            "java.", "javax.", "sun.", "jdk.", "com.sun.", "os.", "file.", "line.", "path.", "user."
++    );
 +
 +    private final LauncherUpdateChecker checker;
 +    private final ReleaseInfo release;
@@ -656,6 +660,19 @@ index 0000000..04d3288
 +            File finalJar = new File(autoolDir, asset.getName());
 +            Files.move(tempFile.toPath(), finalJar.toPath(), StandardCopyOption.REPLACE_EXISTING);
 +            LOGGER.info("Update staged at {}", finalJar.getAbsolutePath());
++
++            // Remove jars from update procedure
++            File[] stale = autoolDir.listFiles((dir, name) -> name.matches("olauncher-[^-]+-redist\\.jar") && !name.equals(asset.getName()));
++            if (stale != null) {
++                for (File old : stale) {
++                    if (old.delete()) {
++                        LOGGER.info("Deleted old update JAR: {}", old.getName());
++                    } else {
++                        LOGGER.warn("Could not delete old update JAR: {}", old.getAbsolutePath());
++                    }
++                }
++            }
++
 +            return finalJar;
 +
 +        } catch (Exception ex) {
@@ -700,9 +717,18 @@ index 0000000..04d3288
 +
 +        List<String> cmd = new ArrayList<>();
 +        cmd.add(javaExe);
++
++        System.getProperties().stringPropertyNames().stream()
++                .filter(key -> !key.equals("dev.figboot.olauncher.forceUpdate"))
++                .filter(key -> JVM_INTERNAL_PREFIXES.stream().noneMatch(key::startsWith))
++                .sorted()
++                .forEach(key -> cmd.add("-D" + key + "=" + System.getProperty(key)));
++
 +        cmd.add("-jar");
 +        cmd.add(newJar.getAbsolutePath());
-+        cmd.addAll(Arrays.asList(Main.getLaunchArgs()));
++        Arrays.stream(Main.getLaunchArgs())
++                .filter(arg -> !arg.equalsIgnoreCase("--forceUpdate"))
++                .forEach(cmd::add);
 +
 +        LOGGER.info("Restarting: {}", String.join(" ", cmd));
 +        new ProcessBuilder(cmd).inheritIO().start();
@@ -1674,5 +1700,5 @@ index 9f6dbad..b4dccc7 100644
  
          JPanel sidebar = new JPanel(new BorderLayout());
 -- 
-2.53.0
+2.54.0.windows.1
 
