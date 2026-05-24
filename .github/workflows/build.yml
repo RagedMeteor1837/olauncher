@@ -34,7 +34,7 @@ jobs:
       artifact-id: ${{ steps.upload-artifact.outputs.artifact-id }}
       outer-sha: ${{ steps.compute-versions.outputs.outer-sha }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: recursive
         fetch-tags: true
@@ -47,7 +47,7 @@ jobs:
         git config --global user.name olauncher
         git config --global core.autocrlf input
     - name: Set up JDK 11
-      uses: actions/setup-java@v4
+      uses: actions/setup-java@v5
       with:
         java-version: '11'
         distribution: 'temurin'
@@ -88,7 +88,7 @@ jobs:
       run: |
         mv olauncher-*-redist.jar olauncher-${{ env.OUTER_SHA }}-redist.jar    
     - name: Upload redistributable
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       id: upload-artifact
       with:
         name: OLauncher Redistributable JAR
@@ -102,7 +102,7 @@ jobs:
       contents: write
     steps:
       - name: Download redistributable jar
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         id: download-artifact
         with:
           artifact-ids: ${{ needs.build.outputs.artifact-id }}
@@ -129,7 +129,7 @@ jobs:
       contents: write
     steps:
       - name: Download redistributable jar
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         id: download-artifact
         with:
           artifact-ids: ${{ needs.build.outputs.artifact-id }}
