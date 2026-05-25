@@ -1,0 +1,599 @@
+From e9d2c63f00acf56670ce3d4d53c3e72f92b6784c Mon Sep 17 00:00:00 2001
+From: RagedMeteor1837 <148640131+RagedMeteor1837@users.noreply.github.com>
+Date: Mon, 25 May 2026 20:25:58 +0100
+Subject: [PATCH] Implement new JVM Arguments
+
+
+diff --git a/src/main/java/dev/figboot/olauncher/launcher/JvmPresetTier.java b/src/main/java/dev/figboot/olauncher/launcher/JvmPresetTier.java
+new file mode 100644
+index 0000000..17fbbeb
+--- /dev/null
++++ b/src/main/java/dev/figboot/olauncher/launcher/JvmPresetTier.java
+@@ -0,0 +1,201 @@
++// JvmPresetTier.java
++// Resolves https://github.com/RagedMeteor1837/olauncher/issues/14
++
++package dev.figboot.olauncher.launcher;
++
++import net.minecraft.launcher.profile.Profile;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
++
++import java.util.*;
++import java.util.stream.Collectors;
++
++public enum JvmPresetTier {
++    LEGACY, G1GC, ZGC;
++
++    private static final Logger LOGGER = LogManager.getLogger();
++
++    // 1.14 release date — anything before this is LEGACY
++    private static final Date LEGACY_DATE_CUTOFF;
++    // 26.x release date — anything on or after this is ZGC
++    private static final Date ZGC_DATE_CUTOFF;
++
++    private static final Set<String> ALL_PRESET_TOKENS;
++    private static Boolean zgcSupported;
++
++    static {
++        Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
++        cal.set(2019, Calendar.APRIL, 23, 0, 0, 0);
++        cal.set(Calendar.MILLISECOND, 0);
++        LEGACY_DATE_CUTOFF = cal.getTime();
++
++        cal.set(2026, Calendar.JANUARY, 1, 0, 0, 0);
++        cal.set(Calendar.MILLISECOND, 0);
++        ZGC_DATE_CUTOFF = cal.getTime();
++
++        ALL_PRESET_TOKENS = new HashSet<>();
++        for (JvmPresetTier t : values()) {
++            Collections.addAll(ALL_PRESET_TOKENS, t.getDefaultArgs().split(" "));
++        }
++    }
++
++    public String getDefaultArgs() {
++        switch (this) {
++            case ZGC:  return Profile.DEFAULT_JRE_ARGUMENTS_64BIT_26;
++            case G1GC: return Profile.DEFAULT_JRE_ARGUMENTS_64BIT_14;
++            default:   return Profile.DEFAULT_JRE_ARGUMENTS_64BIT;
++        }
++    }
++
++
++    // Returns true if ZGC can be used on the current OS
++    // On Windows, ZGC requires build 17134 (1803) or later; Linux and macOS are assumed fine
++    public static boolean isZgcSupported() {
++        if (zgcSupported != null) return zgcSupported;
++        zgcSupported = detectZgcSupport();
++        return zgcSupported;
++    }
++
++    private static boolean detectZgcSupport() {
++        String os = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT);
++        if (!os.contains("win")) {
++            LOGGER.info("ZGC support: true");
++            return true;
++        }
++        if (System.getProperty("olauncher.winTenSpoof") != null) {
++            LOGGER.info("ZGC support: --winTen spoof active, true");
++            return true;
++        }
++        try {
++            Process p = Runtime.getRuntime().exec(new String[]{
++                "reg", "query",
++                "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion",
++                "/v", "CurrentBuildNumber"});
++            try (java.io.BufferedReader r = new java.io.BufferedReader(
++                    new java.io.InputStreamReader(p.getInputStream()))) {
++                String line;
++                while ((line = r.readLine()) != null) {
++                    line = line.trim();
++                    if (line.startsWith("CurrentBuildNumber")) {
++                        String[] tok = line.split("\\s+");
++                        int build = Integer.parseInt(tok[tok.length - 1]);
++                        boolean supported = build >= 17134;
++                        LOGGER.info("ZGC support: {}",
++                                supported ? "true" : "false");
++                        return supported;
++                    }
++                }
++            }
++        } catch (Exception e) {
++            LOGGER.warn("ZGC support: registry query failed, assuming false");
++        }
++        return false;
++    }
++
++    public static JvmPresetTier forVersion(String versionId, Date releaseTime) {
++        JvmPresetTier tier = forVersionUncapped(versionId, releaseTime);
++        if (tier == ZGC && !isZgcSupported()) return G1GC;
++        return tier;
++    }
++
++    private static JvmPresetTier forVersionUncapped(String versionId, Date releaseTime) {
++        if (versionId != null && !versionId.startsWith("latest-")) {
++            if (isOldVersionId(versionId)) return LEGACY;
++
++            JvmPresetTier t = tryParseSegment(versionId);
++            if (t != null) return t;
++
++            String[] segments = versionId.split("-");
++            for (int i = segments.length - 1; i >= 0; i--) {
++                t = tryParseSegment(segments[i]);
++                if (t != null) return t;
++            }
++        }
++
++        if (releaseTime != null) {
++            if (!releaseTime.before(ZGC_DATE_CUTOFF)) return ZGC;
++            if (!releaseTime.before(LEGACY_DATE_CUTOFF)) return G1GC;
++            return LEGACY;
++        }
++        return G1GC; // unknown, safe middle-ground default
++    }
++
++    private static boolean isOldVersionId(String id) {
++        if (id.startsWith("rd-") || id.startsWith("inf-")) return true;
++        if (id.length() >= 2) {
++            char c = id.charAt(0);
++            if ((c == 'a' || c == 'b' || c == 'c') && Character.isDigit(id.charAt(1))) return true;
++        }
++        return false;
++    }
++
++
++    private static JvmPresetTier tryParseSegment(String seg) {
++        String[] parts = seg.split("\\.");
++        if (parts.length < 1) return null;
++        try {
++            int major = Integer.parseInt(parts[0]);
++            if (major >= 26) return ZGC;
++            if (major == 1 && parts.length >= 2) {
++                try {
++                    int minor = Integer.parseInt(parts[1]);
++                    return minor >= 14 ? G1GC : LEGACY;
++                } catch (NumberFormatException ignored) {}
++            }
++        } catch (NumberFormatException ignored) {}
++        return null;
++    }
++
++    public static JvmPresetTier detectFromArgs(String args) {
++        if (args == null) return null;
++        if (args.contains("-XX:+UseZGC")) return ZGC;
++        if (args.contains("-XX:+UseG1GC")) return G1GC;
++        if (args.contains("-XX:+UseConcMarkSweepGC")) return LEGACY;
++        return null;
++    }
++
++    public String swapInto(String currentArgs, JvmPresetTier oldTier) {
++        if (oldTier != null && this == oldTier) return currentArgs;
++        Set<String> remove = (oldTier != null)
++                ? new HashSet<>(Arrays.asList(oldTier.getDefaultArgs().split(" ")))
++                : ALL_PRESET_TOKENS;
++
++        List<String> kept = Arrays.stream(currentArgs.split("\\s+"))
++                .filter(t -> !t.isEmpty() && !remove.contains(t))
++                .collect(Collectors.toList());
++
++        Map<String, String> userByBase = new LinkedHashMap<>();
++        for (String t : kept) userByBase.put(flagBase(t), t);
++
++        Set<String> substituted = new HashSet<>();
++        List<String> result = new ArrayList<>();
++
++        for (String presetToken : this.getDefaultArgs().split(" ")) {
++            String base = flagBase(presetToken);
++            if (userByBase.containsKey(base)) {
++                result.add(userByBase.get(base));
++                substituted.add(base);
++            } else {
++                result.add(presetToken);
++            }
++        }
++
++        for (String t : kept) {
++            if (!substituted.contains(flagBase(t))) result.add(t);
++        }
++
++        return String.join(" ", result);
++    }
++
++    // Returns the "base" of a JVM flag, stripping the value portion.
++    private static String flagBase(String token) {
++        if (token.startsWith("-X") && !token.startsWith("-XX:")) {
++            int i = 0;
++            while (i < token.length() && !Character.isDigit(token.charAt(i))) i++;
++            return i < token.length() ? token.substring(0, i) : token;
++        }
++        int eq = token.indexOf('=');
++        if (eq >= 0) return token.substring(0, eq);
++        return token;
++    }
++}
+diff --git a/src/main/java/net/minecraft/launcher/Main.java b/src/main/java/net/minecraft/launcher/Main.java
+index a23c86f..5e78eb8 100644
+--- a/src/main/java/net/minecraft/launcher/Main.java
++++ b/src/main/java/net/minecraft/launcher/Main.java
+@@ -17,6 +17,7 @@ import java.util.List;
+ import javax.imageio.ImageIO;
+ import javax.swing.JFrame;
+ 
++import dev.figboot.olauncher.launcher.JvmPresetTier;
+ import dev.figboot.olauncher.launcher.LauncherVersion;
+ import joptsimple.ArgumentAcceptingOptionSpec;
+ import joptsimple.NonOptionArgumentSpec;
+@@ -85,6 +86,7 @@ public class Main {
+         if (var6.has("winTen")) {
+             System.setProperty("os.name", "Windows 10");
+             System.setProperty("os.version", "10.0");
++            System.setProperty("olauncher.winTenSpoof", "true");
+         }
+ 
+         forceUpdate = var6.has("forceUpdate")
+@@ -97,6 +99,8 @@ public class Main {
+             var16.setWinTenHack();
+         }
+ 
++        JvmPresetTier.isZgcSupported();
++
+         LOGGER.debug("End of main.");
+     }
+ 
+diff --git a/src/main/java/net/minecraft/launcher/game/MinecraftGameRunner.java b/src/main/java/net/minecraft/launcher/game/MinecraftGameRunner.java
+index b5e9294..1480a61 100644
+--- a/src/main/java/net/minecraft/launcher/game/MinecraftGameRunner.java
++++ b/src/main/java/net/minecraft/launcher/game/MinecraftGameRunner.java
+@@ -48,6 +48,7 @@ import java.util.Arrays;
+ import java.util.List;
+ import java.util.ArrayList;
+ import dev.figboot.olauncher.auth.MicrosoftUserAuthentication;
++import dev.figboot.olauncher.launcher.JvmPresetTier;
+ import dev.figboot.olauncher.launcher.runtime.RuntimesManifest;
+ import dev.figboot.olauncher.util.UUIDGenerator;
+ import net.minecraft.launcher.CompatibilityRule;
+@@ -176,18 +177,25 @@ public class MinecraftGameRunner extends AbstractGameRunner implements GameProce
+             String var5 = this.selectedProfile.getJavaArgs();
+             String[] baseArgs;
+             if (var5 != null) {
++                if (!this.selectedProfile.isLockJvmArgs() && OperatingSystem.getSystemArch().contains("64")) {
++                    JvmPresetTier newTier = JvmPresetTier.forVersion(this.getVersion().getId(), this.getVersion().getReleaseTime());
++                    String stored = this.selectedProfile.getJvmPreset();
++                    JvmPresetTier oldTier = (stored != null) ? safeValueOf(stored) : JvmPresetTier.detectFromArgs(var5);
++                    if (oldTier != newTier) {
++                        var5 = newTier.swapInto(var5, oldTier);
++                    }
++                }
+                 baseArgs = Arrays.stream(var5.split(" ")).filter(s -> !s.isEmpty()).toArray(String[]::new);
+-            } else {     // olauncher - changes for https://github.com/RagedMeteor1837/olauncher/issues/7
+-                boolean var6 = !OperatingSystem.getSystemArch().contains("64"); 
+-                String var7 = var6 ? Profile.DEFAULT_JRE_ARGUMENTS_32BIT : Profile.DEFAULT_JRE_ARGUMENTS_64BIT;
+-                baseArgs = var7.split(" ");
++            } else {
++                if (!OperatingSystem.getSystemArch().contains("64")) {
++                    baseArgs = Profile.DEFAULT_JRE_ARGUMENTS_32BIT.split(" ");
++                } else {
++                    baseArgs = JvmPresetTier.forVersion(this.getVersion().getId(), this.getVersion().getReleaseTime()).getDefaultArgs().split(" ");
++                }
+             }
+ 
+             List<String> finalArgs = new ArrayList<>(Arrays.asList(baseArgs));
+ 
+-            // Use the Java version required by the game version metadata — this is the same data
+-            // that drove bundled runtime selection, and JavaVersionInfo.DEFAULT covers legacy
+-            // versions that predate the javaVersion field (all of which require JRE 8).
+             boolean selectedIsJre8 = this.getVersion().getJavaVersion().getMajorVersion() == 8;
+ 
+             if (selectedIsJre8) {
+@@ -535,6 +543,10 @@ public class MinecraftGameRunner extends AbstractGameRunner implements GameProce
+         return new CurrentLaunchFeatureMatcher(this.selectedProfile, this.getVersion(), this.minecraftLauncher.getProfileManager().getAuthDatabase().getByUUID(this.minecraftLauncher.getProfileManager().getSelectedUser()));
+     }
+ 
++    private static JvmPresetTier safeValueOf(String name) {
++        try { return JvmPresetTier.valueOf(name); } catch (IllegalArgumentException e) { return null; }
++    }
++
+     private String constructClassPath(CompleteMinecraftVersion var1) {
+         StringBuilder var2 = new StringBuilder();
+         Collection var3 = var1.getClassPath(OperatingSystem.getCurrentPlatform(), this.getLauncher().getWorkingDirectory(), this.createFeatureMatcher());
+diff --git a/src/main/java/net/minecraft/launcher/profile/Profile.java b/src/main/java/net/minecraft/launcher/profile/Profile.java
+index acc1786..e20e817 100644
+--- a/src/main/java/net/minecraft/launcher/profile/Profile.java
++++ b/src/main/java/net/minecraft/launcher/profile/Profile.java
+@@ -14,7 +14,10 @@ import net.minecraft.launcher.game.MinecraftReleaseTypeFactory;
+ 
+ public class Profile implements Comparable<Profile> {
+     // olauncher - modernize default JVM arguments
+-    public static final String DEFAULT_JRE_ARGUMENTS_64BIT = "-Xmx2G -XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M";
++    // Further modified to resolve https://github.com/RagedMeteor1837/olauncher/issues/14
++    public static final String DEFAULT_JRE_ARGUMENTS_64BIT_26 = "-Xmx4G -XX:+UseZGC -XX:+UseCompactObjectHeaders -XX:+AlwaysPreTouch -XX:+UseStringDeduplication";
++    public static final String DEFAULT_JRE_ARGUMENTS_64BIT_14 = "-Xmx4G -XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M";
++    public static final String DEFAULT_JRE_ARGUMENTS_64BIT = "-Xmx4G -XX:+UseConcMarkSweepGC -XX:+CMSIncrementalMode -XX:-UseAdaptiveSizePolicy -Xmn128M";
+     public static final String DEFAULT_JRE_ARGUMENTS_32BIT = "-Xmx2G -XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M";
+     public static final Profile.Resolution DEFAULT_RESOLUTION = new Profile.Resolution(854, 480);
+     public static final LauncherVisibilityRule DEFAULT_LAUNCHER_VISIBILITY;
+@@ -26,6 +29,8 @@ public class Profile implements Comparable<Profile> {
+     private String lastVersionId;
+     private String javaDir;
+     private String javaArgs;
++    private String jvmPreset;
++    private boolean lockJvmArgs;
+     private Profile.Resolution resolution;
+     @Deprecated
+     private Set<MinecraftReleaseType> allowedReleaseTypes;
+@@ -43,6 +48,8 @@ public class Profile implements Comparable<Profile> {
+         this.lastVersionId = var1.lastVersionId;
+         this.javaDir = var1.javaDir;
+         this.javaArgs = var1.javaArgs;
++        this.jvmPreset = var1.jvmPreset;
++        this.lockJvmArgs = var1.lockJvmArgs;
+         this.resolution = var1.resolution == null ? null : new Profile.Resolution(var1.resolution);
+         this.allowedReleaseTypes = var1.allowedReleaseTypes == null ? null : Sets.newHashSet(var1.allowedReleaseTypes);
+         this.launcherVisibilityOnGameClose = var1.launcherVisibilityOnGameClose;
+@@ -80,6 +87,22 @@ public class Profile implements Comparable<Profile> {
+         this.javaArgs = var1;
+     }
+ 
++    public String getJvmPreset() {
++        return this.jvmPreset;
++    }
++
++    public void setJvmPreset(String var1) {
++        this.jvmPreset = var1;
++    }
++
++    public boolean isLockJvmArgs() {
++        return this.lockJvmArgs;
++    }
++
++    public void setLockJvmArgs(boolean var1) {
++        this.lockJvmArgs = var1;
++    }
++
+     public String getLastVersionId() {
+         return this.lastVersionId;
+     }
+diff --git a/src/main/java/net/minecraft/launcher/ui/popups/profile/ProfileEditorPopup.java b/src/main/java/net/minecraft/launcher/ui/popups/profile/ProfileEditorPopup.java
+index de48d70..c5eee1a 100644
+--- a/src/main/java/net/minecraft/launcher/ui/popups/profile/ProfileEditorPopup.java
++++ b/src/main/java/net/minecraft/launcher/ui/popups/profile/ProfileEditorPopup.java
+@@ -1,6 +1,10 @@
+ package net.minecraft.launcher.ui.popups.profile;
+ 
+ import com.mojang.launcher.OperatingSystem;
++import com.mojang.launcher.updater.VersionSyncInfo;
++import com.mojang.launcher.versions.Version;
++import dev.figboot.olauncher.launcher.JvmPresetTier;
++import net.minecraft.launcher.updater.MinecraftVersionManager;
+ import java.awt.BorderLayout;
+ import java.awt.Dimension;
+ import java.awt.Window;
+@@ -34,6 +38,7 @@ public class ProfileEditorPopup extends JPanel implements ActionListener {
+     private final ProfileInfoPanel profileInfoPanel;
+     private final ProfileVersionPanel profileVersionPanel;
+     private final ProfileJavaPanel javaInfoPanel;
++    private Version lastKnownVersion;
+ 
+     public ProfileEditorPopup(Launcher var1, Profile var2) {
+         super(true);
+@@ -48,6 +53,7 @@ public class ProfileEditorPopup extends JPanel implements ActionListener {
+         this.setBorder(new EmptyBorder(5, 5, 5, 5));
+         this.setLayout(new BorderLayout(0, 5));
+         this.createInterface();
++        SwingUtilities.invokeLater(this::syncPresetWithCurrentVersion);
+     }
+ 
+     protected void createInterface() {
+@@ -111,6 +117,59 @@ public class ProfileEditorPopup extends JPanel implements ActionListener {
+         return this.profile;
+     }
+ 
++    // olauncher start - resolves https://github.com/RagedMeteor1837/olauncher/issues/14
++    private void syncPresetWithCurrentVersion() {
++        MinecraftVersionManager vm = (MinecraftVersionManager)
++                this.minecraftLauncher.getLauncher().getVersionManager();
++        String versionId = this.profile.getLastVersionId();
++        VersionSyncInfo syncInfo = vm.getVersionSyncInfo(versionId);
++        if (syncInfo == null) {
++            for (VersionSyncInfo info : vm.getVersions(null)) {
++                if (info.getLatestVersion().getId().equals(versionId)) {
++                    syncInfo = info;
++                    break;
++                }
++            }
++        }
++        if (syncInfo == null || syncInfo.getLatestVersion() == null) return;
++        onVersionChanged(syncInfo.getLatestVersion());
++    }
++
++    void onLockReleased() {
++        if (this.lastKnownVersion != null) {
++            onVersionChanged(this.lastKnownVersion);
++        } else {
++            syncPresetWithCurrentVersion();
++        }
++    }
++
++    public void onVersionChanged(Version version) {
++        this.lastKnownVersion = version;
++        if (this.profile.isLockJvmArgs()) return;
++        if (this.profile.getJavaArgs() == null) {
++            if (this.javaInfoPanel != null) this.javaInfoPanel.refreshDisplay();
++            return;
++        }
++        if (!OperatingSystem.getSystemArch().contains("64")) return;
++        JvmPresetTier oldTier;
++        String stored = this.profile.getJvmPreset();
++        if (stored == null) {
++            oldTier = JvmPresetTier.detectFromArgs(this.profile.getJavaArgs());
++        } else {
++            try {
++                oldTier = JvmPresetTier.valueOf(stored);
++            } catch (IllegalArgumentException e) {
++                return;
++            }
++        }
++        JvmPresetTier newTier = JvmPresetTier.forVersion(version.getId(), version.getReleaseTime());
++        if (newTier == oldTier) return;
++        this.profile.setJavaArgs(newTier.swapInto(this.profile.getJavaArgs(), oldTier));
++        this.profile.setJvmPreset(newTier.name());
++        if (this.javaInfoPanel != null) this.javaInfoPanel.refreshDisplay();
++    }
++    // olauncher end
++
+     public static void showEditProfileDialog(Launcher var0, Profile var1) {
+         JFrame var2 = ((SwingUserInterface)var0.getUserInterface()).getFrame();
+         JDialog var3 = new JDialog(var2, "Profile Editor", true);
+diff --git a/src/main/java/net/minecraft/launcher/ui/popups/profile/ProfileJavaPanel.java b/src/main/java/net/minecraft/launcher/ui/popups/profile/ProfileJavaPanel.java
+index fd3043f..5494566 100644
+--- a/src/main/java/net/minecraft/launcher/ui/popups/profile/ProfileJavaPanel.java
++++ b/src/main/java/net/minecraft/launcher/ui/popups/profile/ProfileJavaPanel.java
+@@ -1,7 +1,11 @@
+ package net.minecraft.launcher.ui.popups.profile;
+ 
+ import com.mojang.launcher.OperatingSystem;
++import com.mojang.launcher.updater.VersionSyncInfo;
++import com.mojang.launcher.versions.Version;
++import dev.figboot.olauncher.launcher.JvmPresetTier;
+ import net.minecraft.launcher.profile.Profile;
++import net.minecraft.launcher.updater.MinecraftVersionManager;
+ 
+ import java.awt.GridBagConstraints;
+ import java.awt.GridBagLayout;
+@@ -19,6 +23,7 @@ public class ProfileJavaPanel extends JPanel {
+     private final ProfileEditorPopup editor;
+     private final JCheckBox javaPathCustom = new JCheckBox("Executable:");
+     private final JTextField javaPathField = new JTextField(90); // olaucher - fix for https://github.com/RagedMeteor1837/olauncher/issues/15
++    private final JCheckBox lockJvmArgsCheck = new JCheckBox("Lock Garbage Collection arguments");
+     private final JCheckBox javaArgsCustom = new JCheckBox("Arguments:");
+     private final JTextField javaArgsField = new JTextField(90);
+ 
+@@ -54,6 +59,10 @@ public class ProfileJavaPanel extends JPanel {
+         var1.weightx = 0.0D;
+         var1.fill = 0;
+         ++var1.gridy;
++        var1.gridwidth = 2;
++        this.add(this.lockJvmArgsCheck, var1);
++        var1.gridwidth = 1;
++        ++var1.gridy;
+     }
+ 
+     protected void fillDefaultValues() {
+@@ -64,7 +73,6 @@ public class ProfileJavaPanel extends JPanel {
+             this.javaPathField.setText(var1);
+         } else {
+             this.javaPathCustom.setSelected(false);
+-            //this.javaPathField.setText(OperatingSystem.getCurrentPlatform().getJavaDir()); // olauncher - bundled java runtime UI
+             this.javaPathField.setText("Use bundled runtime");
+         }
+         this.javaPathField.setCaretPosition(0);
+@@ -76,11 +84,12 @@ public class ProfileJavaPanel extends JPanel {
+             this.javaArgsField.setText(var2);
+         } else {
+             this.javaArgsCustom.setSelected(false);
+-            this.javaArgsField.setText(Profile.DEFAULT_JRE_ARGUMENTS_64BIT); // olauncher - use default JVM argument variable
++            this.javaArgsField.setText(getEffectiveTier().getDefaultArgs());
+         }
+         this.javaArgsField.setCaretPosition(0);
+ 
+         this.updateJavaArgsState();
++        this.lockJvmArgsCheck.setSelected(this.editor.getProfile().isLockJvmArgs());
+     }
+ 
+     protected void addEventHandlers() {
+@@ -120,6 +129,43 @@ public class ProfileJavaPanel extends JPanel {
+                 ProfileJavaPanel.this.updateJavaArgs();
+             }
+         });
++
++// olauncher start - resolves https://github.com/RagedMeteor1837/olauncher/issues/14
++        this.lockJvmArgsCheck.addItemListener(new ItemListener() {
++            public void itemStateChanged(ItemEvent var1) {
++                boolean locked = ProfileJavaPanel.this.lockJvmArgsCheck.isSelected();
++                ProfileJavaPanel.this.editor.getProfile().setLockJvmArgs(locked);
++                if (!locked) {
++                    ProfileJavaPanel.this.editor.onLockReleased();
++                }
++            }
++        });
++    }
++
++    public void refreshDisplay() {
++        if (!this.javaArgsCustom.isSelected()) {
++            this.javaArgsField.setText(getEffectiveTier().getDefaultArgs());
++            this.javaArgsField.setCaretPosition(0);
++        } else {
++            String args = this.editor.getProfile().getJavaArgs();
++            if (args != null) {
++                this.javaArgsField.setText(args);
++                this.javaArgsField.setCaretPosition(0);
++            }
++        }
++    }
++
++    private JvmPresetTier getEffectiveTier() {
++        String versionId = this.editor.getProfile().getLastVersionId();
++        MinecraftVersionManager vm = (MinecraftVersionManager)
++                this.editor.getMinecraftLauncher().getLauncher().getVersionManager();
++        VersionSyncInfo syncInfo = vm.getVersionSyncInfo(versionId);
++        if (syncInfo != null && syncInfo.getLatestVersion() != null) {
++            Version v = syncInfo.getLatestVersion();
++            return JvmPresetTier.forVersion(v.getId(), v.getReleaseTime());
++        }
++        return JvmPresetTier.forVersion(versionId, null);
++// olauncher end
+     }
+ 
+     private void updateJavaPath() {
+@@ -157,10 +203,16 @@ public class ProfileJavaPanel extends JPanel {
+     private void updateJavaArgsState() {
+         if (this.javaArgsCustom.isSelected()) {
+             this.javaArgsField.setEnabled(true);
++            if (this.editor.getProfile().getJvmPreset() == null) {
++                this.editor.getProfile().setJvmPreset(getEffectiveTier().name());
++            }
+             this.editor.getProfile().setJavaArgs(this.javaArgsField.getText());
+         } else {
+             this.javaArgsField.setEnabled(false);
++            this.javaArgsField.setText(getEffectiveTier().getDefaultArgs());
++            this.javaArgsField.setCaretPosition(0);
+             this.editor.getProfile().setJavaArgs((String)null);
++            this.editor.getProfile().setJvmPreset(null);
+         }
+ 
+     }
+diff --git a/src/main/java/net/minecraft/launcher/ui/popups/profile/ProfileVersionPanel.java b/src/main/java/net/minecraft/launcher/ui/popups/profile/ProfileVersionPanel.java
+index 30322e9..8b79b5a 100644
+--- a/src/main/java/net/minecraft/launcher/ui/popups/profile/ProfileVersionPanel.java
++++ b/src/main/java/net/minecraft/launcher/ui/popups/profile/ProfileVersionPanel.java
+@@ -90,7 +90,9 @@ public class ProfileVersionPanel extends JPanel implements RefreshedVersionsList
+     protected void addEventHandlers() {
+         this.versionList.addItemListener(new ItemListener() {
+             public void itemStateChanged(ItemEvent var1) {
+-                ProfileVersionPanel.this.updateVersionSelection();
++                if (var1.getStateChange() == ItemEvent.SELECTED) {
++                    ProfileVersionPanel.this.updateVersionSelection();
++                }
+             }
+         });
+         Iterator var1 = this.customVersionTypes.iterator();
+@@ -149,12 +151,13 @@ public class ProfileVersionPanel extends JPanel implements RefreshedVersionsList
+         if (var1 instanceof VersionSyncInfo) {
+             var2 = ((VersionSyncInfo)var1).getLatestVersion();
+             this.editor.getProfile().setLastVersionId(var2.getId());
+-        } else if (var1 instanceof Version){
++        } else if (var1 instanceof Version) {
+             var2 = (Version) var1;
+             this.editor.getProfile().setLastVersionId("latest-" + var2.getType().getName().toLowerCase());
++        } else {
++            return;
+         }
+-
+-
++        this.editor.onVersionChanged(var2);
+     }
+ 
+     private void populateVersions(MinecraftVersionManager versionManager) { // olauncher - use version manager
+-- 
+2.54.0.windows.1
+
