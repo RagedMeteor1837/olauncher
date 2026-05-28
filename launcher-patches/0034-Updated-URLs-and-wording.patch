@@ -1,4 +1,4 @@
-From 9675f2725d15cfe7460c64963ea96a56fd528bf6 Mon Sep 17 00:00:00 2001
+From 404850b0269eb35084e242e1febc63da0e5a6843 Mon Sep 17 00:00:00 2001
 From: RagedMeteor1837 <148640131+RagedMeteor1837@users.noreply.github.com>
 Date: Thu, 25 Sep 2025 17:55:40 +0100
 Subject: [PATCH] Updated URLs and wording
@@ -85,48 +85,6 @@ index 6754e1c..4831ef0 100644
      public static final int UNVERSIONED_BOOTSTRAP_VERSION = 0;
      public static final int MINIMUM_BOOTSTRAP_SUPPORTED = 4;
      public static final int SUPER_COOL_BOOTSTRAP_VERSION = 100;
-diff --git a/src/main/java/net/minecraft/launcher/ui/bottombar/ProfileSelectionPanel.java b/src/main/java/net/minecraft/launcher/ui/bottombar/ProfileSelectionPanel.java
-index 1121e25..4e73367 100644
---- a/src/main/java/net/minecraft/launcher/ui/bottombar/ProfileSelectionPanel.java
-+++ b/src/main/java/net/minecraft/launcher/ui/bottombar/ProfileSelectionPanel.java
-@@ -33,8 +33,8 @@ import org.apache.logging.log4j.Logger;
- public class ProfileSelectionPanel extends JPanel implements ActionListener, ItemListener, RefreshedProfilesListener {
-     private static final Logger LOGGER = LogManager.getLogger();
-     private final JComboBox profileList = new JComboBox();
--    private final JButton newProfileButton = new JButton("New Profile");
--    private final JButton editProfileButton = new JButton("Edit Profile");
-+    private final JButton newProfileButton = new JButton("New Instance");
-+    private final JButton editProfileButton = new JButton("Edit Instance");
-     private final Launcher minecraftLauncher;
-     private boolean skipSelectionUpdate;
- 
-@@ -43,7 +43,7 @@ public class ProfileSelectionPanel extends JPanel implements ActionListener, Ite
-         this.profileList.setRenderer(new ProfileSelectionPanel.ProfileListRenderer());
-         this.profileList.addActionListener(this);
-         this.profileList.addItemListener(this);
--        this.profileList.addItem("Loading profiles...");
-+        this.profileList.addItem("Loading instances...");
-         this.newProfileButton.addActionListener(this);
-         this.editProfileButton.addActionListener(this);
-         this.createInterface();
-@@ -56,7 +56,7 @@ public class ProfileSelectionPanel extends JPanel implements ActionListener, Ite
-         var1.fill = 2;
-         var1.weightx = 0.0D;
-         var1.gridy = 0;
--        this.add(new JLabel("Profile: "), var1);
-+        this.add(new JLabel("Instance: "), var1);
-         var1.gridx = 1;
-         this.add(this.profileList, var1);
-         var1.gridx = 0;
-@@ -117,7 +117,7 @@ public class ProfileSelectionPanel extends JPanel implements ActionListener, Ite
-                 try {
-                     this.minecraftLauncher.getProfileManager().saveProfiles();
-                 } catch (IOException var4) {
--                    LOGGER.error("Couldn't save new selected profile", var4);
-+                    LOGGER.error("Couldn't save new selected instance", var4);
-                 }
- 
-                 this.minecraftLauncher.ensureLoggedIn();
 diff --git a/src/main/java/net/minecraft/launcher/ui/bottombar/StatusPanelForm.java b/src/main/java/net/minecraft/launcher/ui/bottombar/StatusPanelForm.java
 index 91240e0..9379327 100644
 --- a/src/main/java/net/minecraft/launcher/ui/bottombar/StatusPanelForm.java
@@ -140,39 +98,8 @@ index 91240e0..9379327 100644
                      Iterator var3 = var2.iterator();
  
                      while(var3.hasNext()) {
-diff --git a/src/main/java/net/minecraft/launcher/ui/popups/profile/ProfileEditorPopup.java b/src/main/java/net/minecraft/launcher/ui/popups/profile/ProfileEditorPopup.java
-index 1f46772..1c68f9b 100644
---- a/src/main/java/net/minecraft/launcher/ui/popups/profile/ProfileEditorPopup.java
-+++ b/src/main/java/net/minecraft/launcher/ui/popups/profile/ProfileEditorPopup.java
-@@ -27,7 +27,7 @@ public class ProfileEditorPopup extends JPanel implements ActionListener {
-     private static final Logger LOGGER = LogManager.getLogger();
-     private final Launcher minecraftLauncher;
-     private final Profile profile;
--    private final JButton saveButton = new JButton("Save Profile");
-+    private final JButton saveButton = new JButton("Save Instance");
-     private final JButton cancelButton = new JButton("Cancel");
-     private final JButton browseButton = new JButton("Open Game Dir");
-     private final ProfileInfoPanel profileInfoPanel;
-@@ -76,7 +76,7 @@ public class ProfileEditorPopup extends JPanel implements ActionListener {
-                 var2.saveProfiles();
-                 var2.fireRefreshEvent();
-             } catch (IOException var5) {
--                LOGGER.error("Couldn't save profiles whilst editing " + this.profile.getName(), var5);
-+                LOGGER.error("Couldn't save instances whilst editing " + this.profile.getName(), var5);
-             }
- 
-             this.closeWindow();
-@@ -112,7 +112,7 @@ public class ProfileEditorPopup extends JPanel implements ActionListener {
- 
-     public static void showEditProfileDialog(Launcher var0, Profile var1) {
-         JFrame var2 = ((SwingUserInterface)var0.getUserInterface()).getFrame();
--        JDialog var3 = new JDialog(var2, "Profile Editor", true);
-+        JDialog var3 = new JDialog(var2, "Instance Editor", true);
-         ProfileEditorPopup var4 = new ProfileEditorPopup(var0, var1);
-         var3.add(var4);
-         var3.pack();
 diff --git a/src/main/java/net/minecraft/launcher/ui/popups/profile/ProfileInfoPanel.java b/src/main/java/net/minecraft/launcher/ui/popups/profile/ProfileInfoPanel.java
-index 8318f47..0a8ca95 100644
+index 8318f47..75697e6 100644
 --- a/src/main/java/net/minecraft/launcher/ui/popups/profile/ProfileInfoPanel.java
 +++ b/src/main/java/net/minecraft/launcher/ui/popups/profile/ProfileInfoPanel.java
 @@ -21,7 +21,7 @@ import net.minecraft.launcher.profile.Profile;
@@ -184,15 +111,6 @@ index 8318f47..0a8ca95 100644
      private final JTextField profileName = new JTextField();
      private final JTextField gameDirField = new JTextField();
      private final JCheckBox resolutionCustom = new JCheckBox("Resolution:");
-@@ -34,7 +34,7 @@ public class ProfileInfoPanel extends JPanel {
-     public ProfileInfoPanel(ProfileEditorPopup var1) {
-         this.editor = var1;
-         this.setLayout(new GridBagLayout());
--        this.setBorder(BorderFactory.createTitledBorder("Profile Info"));
-+        this.setBorder(BorderFactory.createTitledBorder("Instance Info"));
-         this.createInterface();
-         this.fillDefaultValues();
-         this.addEventHandlers();
 @@ -45,7 +45,7 @@ public class ProfileInfoPanel extends JPanel {
          var1.insets = new Insets(2, 2, 2, 2);
          var1.anchor = 17;
@@ -203,63 +121,41 @@ index 8318f47..0a8ca95 100644
          var1.weightx = 1.0D;
          this.add(this.profileName, var1);
 diff --git a/src/main/java/net/minecraft/launcher/ui/tabs/LauncherTabPanel.java b/src/main/java/net/minecraft/launcher/ui/tabs/LauncherTabPanel.java
-index fe39640..07d3253 100644
+index fe39640..9b9b28c 100644
 --- a/src/main/java/net/minecraft/launcher/ui/tabs/LauncherTabPanel.java
 +++ b/src/main/java/net/minecraft/launcher/ui/tabs/LauncherTabPanel.java
 @@ -20,8 +20,8 @@ public class LauncherTabPanel extends JTabbedPane {
  
      protected void createInterface() {
          this.addTab("Update Notes", this.blog);
-+        this.addTab("Instance Editor", new ProfileListTab(this.minecraftLauncher));
-         this.addTab("Launcher Log", this.console);
--        this.addTab("Profile Editor", new ProfileListTab(this.minecraftLauncher));
+-        this.addTab("Launcher Log", this.console);
+         this.addTab("Profile Editor", new ProfileListTab(this.minecraftLauncher));
++        this.addTab("Launcher Log", this.console);
      }
  
      public Launcher getMinecraftLauncher() {
 diff --git a/src/main/java/net/minecraft/launcher/ui/tabs/ProfileListTab.java b/src/main/java/net/minecraft/launcher/ui/tabs/ProfileListTab.java
-index 8b249f5..18c5d86 100644
+index 8b249f5..b7862b5 100644
 --- a/src/main/java/net/minecraft/launcher/ui/tabs/ProfileListTab.java
 +++ b/src/main/java/net/minecraft/launcher/ui/tabs/ProfileListTab.java
-@@ -52,9 +52,9 @@ public class ProfileListTab extends JScrollPane implements RefreshedProfilesList
-     public ProfileListTab(Launcher var1) {
-         this.table = new JTable(this.dataModel);
-         this.popupMenu = new JPopupMenu();
--        this.addProfileButton = new JMenuItem("Add Profile");
--        this.copyProfileButton = new JMenuItem("Copy Profile");
--        this.deleteProfileButton = new JMenuItem("Delete Profile");
-+        this.addProfileButton = new JMenuItem("Add Instance");
-+        this.copyProfileButton = new JMenuItem("Copy Instance");
-+        this.deleteProfileButton = new JMenuItem("Delete Instance");
-         this.browseGameFolder = new JMenuItem("Open Game Folder");
-         this.minecraftLauncher = var1;
-         this.setViewportView(this.table);
-@@ -87,7 +87,7 @@ public class ProfileListTab extends JScrollPane implements RefreshedProfilesList
-         this.addProfileButton.addActionListener(new ActionListener() {
-             public void actionPerformed(ActionEvent var1) {
-                 Profile var2 = new Profile();
--                var2.setName("New Profile");
-+                var2.setName("New Instance");
-                 var2.setUniqueName(UUIDGenerator.generate()); // olauncher - support for multiple same name
-                 ProfileEditorPopup.showEditProfileDialog(ProfileListTab.this.getMinecraftLauncher(), var2);
-             }
-@@ -118,7 +118,7 @@ public class ProfileListTab extends JScrollPane implements RefreshedProfilesList
-                 int var2 = ProfileListTab.this.table.getSelectedRow();
-                 if (var2 >= 0 && var2 < ProfileListTab.this.table.getRowCount()) {
-                     Profile var3 = (Profile)ProfileListTab.this.dataModel.profiles.get(var2);
--                    int var4 = JOptionPane.showOptionDialog(((SwingUserInterface)ProfileListTab.this.minecraftLauncher.getUserInterface()).getFrame(), "Are you sure you want to delete this profile?", "Profile Confirmation", 0, 2, (Icon)null, LauncherConstants.CONFIRM_PROFILE_DELETION_OPTIONS, LauncherConstants.CONFIRM_PROFILE_DELETION_OPTIONS[0]);
-+                    int var4 = JOptionPane.showOptionDialog(((SwingUserInterface)ProfileListTab.this.minecraftLauncher.getUserInterface()).getFrame(), "Are you sure you want to delete this instance?", "Instance Confirmation", 0, 2, (Icon)null, LauncherConstants.CONFIRM_PROFILE_DELETION_OPTIONS, LauncherConstants.CONFIRM_PROFILE_DELETION_OPTIONS[0]);
-                     if (var4 == 0) {
-                         ProfileListTab.this.minecraftLauncher.getProfileManager().getProfiles().remove(var3.getUniqueName()); // olauncher - use unique name
- 
 @@ -126,7 +126,7 @@ public class ProfileListTab extends JScrollPane implements RefreshedProfilesList
                              ProfileListTab.this.minecraftLauncher.getProfileManager().saveProfiles();
                              ProfileListTab.this.minecraftLauncher.getProfileManager().fireRefreshEvent();
                          } catch (IOException var6) {
 -                            ProfileListTab.LOGGER.error("Couldn't save profiles whilst deleting '" + var3.getName() + "'", var6);
-+                            ProfileListTab.LOGGER.error("Couldn't save instance whilst deleting '" + var3.getName() + "'", var6);
++                            ProfileListTab.LOGGER.error("Couldn't save profile whilst deleting '" + var3.getName() + "'", var6);
                          }
                      }
  
+@@ -208,7 +208,7 @@ public class ProfileListTab extends JScrollPane implements RefreshedProfilesList
+         public String getColumnName(int var1) {
+             switch(var1) {
+             case 0:
+-                return "Version name";
++                return "Profile name";
+             case 1:
+                 return "Version";
+             default:
 -- 
 2.43.0
 

@@ -1,6 +1,7 @@
 /olauncher/
 /launcher/
 /work/
+/resources/
 
 .idea/
 *.iml
@@ -9,3 +10,4 @@
 **/target/
 
 *.jar
+.DS_Store

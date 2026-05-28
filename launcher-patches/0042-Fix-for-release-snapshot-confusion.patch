@@ -1,0 +1,32 @@
+From e5288f495ae7d15f8e231d50e6c8a3ee48e68fa9 Mon Sep 17 00:00:00 2001
+From: RagedMeteor1837 <148640131+RagedMeteor1837@users.noreply.github.com>
+Date: Sun, 29 Mar 2026 19:23:33 +0100
+Subject: [PATCH] Fix for release snapshot confusion
+
+
+diff --git a/src/main/java/net/minecraft/launcher/updater/RemoteVersionList.java b/src/main/java/net/minecraft/launcher/updater/RemoteVersionList.java
+index d54d93c..09a512c 100644
+--- a/src/main/java/net/minecraft/launcher/updater/RemoteVersionList.java
++++ b/src/main/java/net/minecraft/launcher/updater/RemoteVersionList.java
+@@ -88,6 +88,18 @@ public class RemoteVersionList extends VersionList {
+             this.latestVersions.put(var5, partialVersion);
+         }
+ 
++        // olauncher - if latest release and snapshot are the same version, treat it as a release only
++        String latestRelease = var1.getLatestVersions().get(MinecraftReleaseType.RELEASE);
++        String latestSnapshot = var1.getLatestVersions().get(MinecraftReleaseType.SNAPSHOT);
++        if (latestRelease != null && latestRelease.equals(latestSnapshot)) {
++            PartialVersion sharedVersion = (PartialVersion) this.versionsByName.get(latestRelease);
++            if (sharedVersion != null) {
++                sharedVersion.setType(MinecraftReleaseType.RELEASE);
++                this.latestVersions.put(MinecraftReleaseType.RELEASE, sharedVersion);
++                this.latestVersions.remove(MinecraftReleaseType.SNAPSHOT);
++            }
++        }
++
+     }
+ 
+     public boolean hasAllFiles(CompleteMinecraftVersion var1, OperatingSystem var2) {
+-- 
+2.50.1 (Apple Git-155)
+

@@ -1,0 +1,357 @@
+From 7489373a59c8e4a15a974894c9727e02e818c311 Mon Sep 17 00:00:00 2001
+From: RagedMeteor1837 <148640131+RagedMeteor1837@users.noreply.github.com>
+Date: Sat, 2 May 2026 18:15:40 +0100
+Subject: [PATCH] Fix bugs and reduce log outputs
+
+
+diff --git a/src/main/java/com/mojang/launcher/game/runner/AbstractGameRunner.java b/src/main/java/com/mojang/launcher/game/runner/AbstractGameRunner.java
+index 8c6157d..04b12a6 100644
+--- a/src/main/java/com/mojang/launcher/game/runner/AbstractGameRunner.java
++++ b/src/main/java/com/mojang/launcher/game/runner/AbstractGameRunner.java
+@@ -67,13 +67,12 @@ public abstract class AbstractGameRunner implements GameRunner, DownloadListener
+             this.setStatus(GameInstanceStatus.PREPARING);
+         }
+ 
+-        LOGGER.info("Getting syncinfo for selected version");
+         if (var1 == null) {
+             LOGGER.warn("Tried to launch a version without a version being selected...");
+             this.setStatus(GameInstanceStatus.IDLE);
+         } else {
++            LOGGER.info("Preparing version " + var1.getLatestVersion());
+             synchronized(this.lock) {
+-                LOGGER.info("Queueing library & version downloads");
+ 
+                 try {
+                     this.version = this.getLauncher().getVersionManager().getLatestCompleteVersion(var1);
+@@ -287,7 +286,7 @@ public abstract class AbstractGameRunner implements GameRunner, DownloadListener
+                 LOGGER.error("Job '" + var1.getName() + "' finished with " + var1.getFailures() + " failure(s)! (took " + var1.getStopWatch().toString() + ")");
+                 this.setStatus(GameInstanceStatus.IDLE);
+             } else {
+-                LOGGER.info("Job '" + var1.getName() + "' finished successfully (took " + var1.getStopWatch().toString() + ")");
++                LOGGER.debug("Job '" + var1.getName() + "' finished successfully (took " + var1.getStopWatch().toString() + ")");
+                 if (this.getStatus() != GameInstanceStatus.IDLE && !this.hasRemainingJobs()) {
+                     try {
+                         this.setStatus(GameInstanceStatus.LAUNCHING);
+diff --git a/src/main/java/com/mojang/launcher/updater/download/DownloadJob.java b/src/main/java/com/mojang/launcher/updater/download/DownloadJob.java
+index 20ebcf0..9fe0356 100644
+--- a/src/main/java/com/mojang/launcher/updater/download/DownloadJob.java
++++ b/src/main/java/com/mojang/launcher/updater/download/DownloadJob.java
+@@ -98,7 +98,7 @@ public class DownloadJob {
+             this.started = true;
+             this.stopWatch.start();
+             if (this.allFiles.isEmpty()) {
+-                LOGGER.info("Download job '" + this.name + "' skipped as there are no files to download");
++                LOGGER.debug("Download job '" + this.name + "' skipped as there are no files to download");
+                 this.listener.onDownloadJobFinished(this);
+             } else {
+                 int var2 = var1.getMaximumPoolSize();
+@@ -132,12 +132,12 @@ public class DownloadJob {
+                 LOGGER.error("Gave up trying to download " + var1.getUrl() + " for job '" + this.name + "'");
+             } else {
+                 try {
+-                    LOGGER.info("Attempting to download " + var1.getTarget() + " for job '" + this.name + "'... (try " + var1.getNumAttempts() + ")");
++                    LOGGER.debug("Attempting to download " + var1.getTarget() + " for job '" + this.name + "'... (try " + var1.getNumAttempts() + ")");
+                     String var2 = var1.download();
+                     this.successful.add(var1);
+                     var1.setEndTime(System.currentTimeMillis());
+                     var1.getMonitor().setCurrent(var1.getMonitor().getTotal());
+-                    LOGGER.info("Finished downloading " + var1.getTarget() + " for job '" + this.name + "'" + ": " + var2);
++                    LOGGER.debug("Finished downloading " + var1.getTarget() + " for job '" + this.name + "'" + ": " + var2);
+                 } catch (Throwable var3) {
+                     LOGGER.warn("Couldn't download " + var1.getUrl() + " for job '" + this.name + "'", var3);
+                     var1.getMonitor().setCurrent(var1.getMonitor().getTotal());
+diff --git a/src/main/java/dev/figboot/olauncher/auth/MSLoginServer.java b/src/main/java/dev/figboot/olauncher/auth/MSLoginServer.java
+index ada5ca8..7a958da 100644
+--- a/src/main/java/dev/figboot/olauncher/auth/MSLoginServer.java
++++ b/src/main/java/dev/figboot/olauncher/auth/MSLoginServer.java
+@@ -3,6 +3,7 @@ package dev.figboot.olauncher.auth;
+ import lombok.AccessLevel;
+ import lombok.Getter;
+ import lombok.RequiredArgsConstructor;
++import lombok.Setter;
+ import org.apache.logging.log4j.LogManager;
+ import org.apache.logging.log4j.Logger;
+ 
+@@ -99,9 +100,12 @@ public class MSLoginServer {
+         serverThread.join(timeout);
+     }
+ 
+-    private static final Pattern GET_RQ_PATTERN = Pattern.compile("^GET /\\?code=([a-zA-Z0-9_.\\-]+) HTTP/[0-9.]+$");
+-    private static final Pattern GET_ERROR_PATTERN = Pattern.compile("^GET /\\?error=([a-zA-Z0-9_\\-]+)&error_description=(.+) HTTP/[0-9.]+$");
+-    private static final Pattern AUTH_COMPLETE_PATTERN = Pattern.compile("^GET /authComplete HTTP/[0-9.]+$");
++    // hopefully squash bugs with login procedure - olauncher
++    private static final Pattern GET_REQUEST_LINE = Pattern.compile("^GET (\\S+) HTTP/[0-9.]+$");
++    private static final Pattern QUERY_CODE  = Pattern.compile("[?&]code=([^& ]+)");
++    private static final Pattern QUERY_ERROR = Pattern.compile("[?&]error=([^& ]+)");
++    private static final Pattern QUERY_ERROR_DESC = Pattern.compile("[?&]error_description=([^& ]+)");
++
+     private void handle() throws Exception {
+         synchronized (stateVarLock) {
+             running = true;
+@@ -158,11 +162,12 @@ public class MSLoginServer {
+                             handlerCalled = true;
+                         }
+ 
+-                        break;
+-                    } else if ((matcher = GET_ERROR_PATTERN.matcher(line)).matches()) {
++                    } else if (errorMatcher.find()) {
+                         LOGGER.info("Authorization error");
+-                        String error = matcher.group(1);
+-                        String errorDesc = URLDecoder.decode(matcher.group(2), "UTF-8");
++                        String error = errorMatcher.group(1);
++                        Matcher descMatcher = QUERY_ERROR_DESC.matcher(path);
++                        String errorDesc = descMatcher.find()
++                                ? URLDecoder.decode(descMatcher.group(1), "UTF-8") : "";
+ 
+                         String content = "The authorization has been cancelled. You may now close this window.";
+                         byte[] contentBytes = content.getBytes(StandardCharsets.UTF_8);
+@@ -171,35 +176,12 @@ public class MSLoginServer {
+                         out.write(("Content-length: " + contentBytes.length + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+                         out.write(contentBytes);
+ 
+-                        synchronized (stateVarLock) {
+-                            stop = true;
+-                        }
+-
++                        synchronized (stateVarLock) { stop = true; }
+                         synchronized (handlerSync) {
+                             if (!handlerCalled) handleComplete.accept(new Response(null, error, errorDesc));
+                             handlerCalled = true;
+                         }
+ 
+-                        break;
+-                    } else if ((matcher = AUTH_COMPLETE_PATTERN.matcher(line)).matches()) {
+-                        LOGGER.info("GET request received (/authComplete)");
+-                        String content = "The code has been received. You may now close this window.";
+-                        byte[] contentBytes = content.getBytes(StandardCharsets.UTF_8);
+-                        client.getOutputStream().write("HTTP/1.1 200 OK\r\n".getBytes(StandardCharsets.UTF_8));
+-                        client.getOutputStream().write("Content-type: text/plain\r\n".getBytes(StandardCharsets.UTF_8));
+-                        client.getOutputStream().write(("Content-length: " + contentBytes.length + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+-                        client.getOutputStream().write(contentBytes);
+-
+-                        synchronized (stateVarLock) {
+-                            stop = true;
+-                        }
+-
+-                        synchronized (handlerSync) {
+-                            if (!handlerCalled) handleComplete.accept(new Response(null, null, null));
+-                            handlerCalled = true;
+-                        }
+-
+-                        break;
+                     } else {
+                         LOGGER.warn("Unrecognised GET path: {}", path);
+                         out.write("HTTP/1.1 404 Not Found\r\n\r\n".getBytes(StandardCharsets.UTF_8));
+@@ -215,6 +197,7 @@ public class MSLoginServer {
+         private final String code;
+         private final String error;
+         private final String errorDesc;
++        @Setter private String codeVerifier;
+ 
+         public boolean isSuccess() {
+             return code != null;
+diff --git a/src/main/java/dev/figboot/olauncher/auth/MicrosoftUserAuthentication.java b/src/main/java/dev/figboot/olauncher/auth/MicrosoftUserAuthentication.java
+index 9b1c67e..1ec8288 100644
+--- a/src/main/java/dev/figboot/olauncher/auth/MicrosoftUserAuthentication.java
++++ b/src/main/java/dev/figboot/olauncher/auth/MicrosoftUserAuthentication.java
+@@ -77,6 +77,7 @@ public class MicrosoftUserAuthentication extends HttpUserAuthentication {
+         }
+ 
+         String msAuthCode = msLoginRes == null ? null : this.msLoginRes.getCode();
++        String msPkceVerifier = msLoginRes == null ? null : this.msLoginRes.getCodeVerifier();
+         this.msLoginRes = null;
+ 
+         Instant later = Instant.now().plus(6, ChronoUnit.HOURS);
+@@ -93,7 +94,7 @@ public class MicrosoftUserAuthentication extends HttpUserAuthentication {
+             xstsAndMinecraftLogIn(hash);
+             profileLogIn();
+         } else if (msAuthCode != null) {
+-            String hash = msAndXblColdLogIn(msAuthCode);
++            String hash = msAndXblColdLogIn(msAuthCode, msPkceVerifier);
+             xstsAndMinecraftLogIn(hash);
+             profileLogIn();
+         } else if (xuid != null) {
+@@ -122,8 +123,8 @@ public class MicrosoftUserAuthentication extends HttpUserAuthentication {
+         }
+     }
+ 
+-    private String msAndXblColdLogIn(String msAuthCode) throws AuthenticationException {
+-        LOGGER.debug("Getting access token from live...");
++    private String msAndXblColdLogIn(String msAuthCode, String codeVerifier) throws AuthenticationException {
++        LOGGER.debug("Getting access token from Microsoft...");
+         MSTokenAuthResponse tokAuthRes;
+ 
+         try {
+@@ -133,6 +134,7 @@ public class MicrosoftUserAuthentication extends HttpUserAuthentication {
+                         form.append("code", msAuthCode);
+                         form.append("grant_type", "authorization_code");
+                         form.append("redirect_uri", OLauncherConstants.REDIR_URI);
++                        if (codeVerifier != null) form.append("code_verifier", codeVerifier);
+                     }, MSTokenAuthResponse.class);
+         } catch (ResponseCodeException ex) {
+             MSResponse res = ex.getResponse();
+@@ -145,7 +147,7 @@ public class MicrosoftUserAuthentication extends HttpUserAuthentication {
+     }
+ 
+     private String msAndXblWarmLogIn() throws AuthenticationException {
+-        LOGGER.debug("Logging into live with a refresh token...");
++        LOGGER.debug("Refreshing Microsoft token...");
+         MSTokenAuthResponse tokAuthRes;
+ 
+         try {
+diff --git a/src/main/java/dev/figboot/olauncher/auth/ui/MSLoginDialog.java b/src/main/java/dev/figboot/olauncher/auth/ui/MSLoginDialog.java
+index f37edf7..1a61d6c 100644
+--- a/src/main/java/dev/figboot/olauncher/auth/ui/MSLoginDialog.java
++++ b/src/main/java/dev/figboot/olauncher/auth/ui/MSLoginDialog.java
+@@ -17,6 +17,11 @@ import java.io.IOException;
+ import java.net.InetAddress;
+ import java.net.URI;
+ import java.net.URLEncoder;
++import java.nio.charset.StandardCharsets;
++import java.security.MessageDigest;
++import java.security.NoSuchAlgorithmException;
++import java.security.SecureRandom;
++import java.util.Base64;
+ import java.util.function.Consumer;
+ 
+ public class MSLoginDialog extends JDialog {
+@@ -29,11 +34,12 @@ public class MSLoginDialog extends JDialog {
+ 
+     private MSLoginServer loginServer;
+     private final Consumer<MSLoginServer.Response> callback;
++    private String codeVerifier;
+ 
+     public MSLoginDialog(Consumer<MSLoginServer.Response> callback) {
+         this.callback = callback;
+ 
+-        lblInfo = new JLabel("Waiting for webpage response...");
++        lblInfo = new JLabel("Waiting for browser...");
+         btnCancel = new JButton("Cancel");
+         btnCopy = new JButton("Copy Link");
+ 
+@@ -61,17 +67,23 @@ public class MSLoginDialog extends JDialog {
+         });
+ 
+         try {
++            codeVerifier = generateCodeVerifier();
++            String codeChallenge = computeCodeChallenge(codeVerifier);
++
+             loginServer = new MSLoginServer(InetAddress.getLoopbackAddress(), OLauncherConstants.REDIR_URI_PORT, this::handleComplete);
+             loginServer.listen();
+-            OperatingSystem.openLink(URI.create(link = String.format("https://login.live.com/oauth20_authorize.srf" +
+-                            "?client_id=%s&response_type=code&redirect_uri=%s&scope=%s&prompt=select_account",
++            OperatingSystem.openLink(URI.create(link = String.format(
++                    OLauncherConstants.AUTH_CODE_URL +
++                    "?client_id=%s&response_type=code&redirect_uri=%s&scope=%s&prompt=select_account" +
++                    "&code_challenge=%s&code_challenge_method=S256",
+                     URLEncoder.encode(OLauncherConstants.APP_CLIENT_ID.toString(), "UTF-8"),
+                     URLEncoder.encode(OLauncherConstants.REDIR_URI, "UTF-8"),
+-                    URLEncoder.encode(OLauncherConstants.APP_SCOPES, "UTF-8")
++                    URLEncoder.encode(OLauncherConstants.APP_SCOPES, "UTF-8"),
++                    URLEncoder.encode(codeChallenge, "UTF-8")
+             )));
+ 
+             initInterface();
+-        } catch (IOException ex) {
++        } catch (IOException | NoSuchAlgorithmException ex) {
+             if (loginServer != null) loginServer.stop();
+             LOGGER.error("Unable to start login server");
+             ex.printStackTrace();
+@@ -81,6 +93,18 @@ public class MSLoginDialog extends JDialog {
+         }
+     }
+ 
++    private static String generateCodeVerifier() {
++        byte[] bytes = new byte[32];
++        new SecureRandom().nextBytes(bytes);
++        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
++    }
++
++    private static String computeCodeChallenge(String verifier) throws NoSuchAlgorithmException {
++        MessageDigest digest = MessageDigest.getInstance("SHA-256");
++        byte[] hash = digest.digest(verifier.getBytes(StandardCharsets.US_ASCII));
++        return Base64.getUrlEncoder().withoutPadding().encodeToString(hash);
++    }
++
+     private void initInterface() {
+         setTitle("OLauncher Login");
+         setResizable(false);
+@@ -119,6 +143,9 @@ public class MSLoginDialog extends JDialog {
+ 
+     private void handleComplete(MSLoginServer.Response response) {
+         LOGGER.debug("Code get! " + response);
++        if (response != null && response.isSuccess()) {
++            response.setCodeVerifier(codeVerifier);
++        }
+         SwingUtilities.invokeLater(() -> {
+             dispose();
+             callback.accept(response);
+diff --git a/src/main/java/net/minecraft/launcher/ui/popups/login/LogInPopup.java b/src/main/java/net/minecraft/launcher/ui/popups/login/LogInPopup.java
+index f6de730..860da80 100644
+--- a/src/main/java/net/minecraft/launcher/ui/popups/login/LogInPopup.java
++++ b/src/main/java/net/minecraft/launcher/ui/popups/login/LogInPopup.java
+@@ -30,8 +30,8 @@ public class LogInPopup extends JPanel implements ActionListener {
+     private final LogInForm logInForm;
+     private final JButton loginButton = new JButton("Log In");
+     private final JButton registerButton = new JButton("Register");
+-    private final JButton microsoftLoginButton = new JButton("Microsoft Login"); // olauncher - Add MS login button
+-    private final JButton microsoftDeviceLoginButton = new JButton("Microsoft Login"); // olauncher - Add MS login button
++    private final JButton microsoftLoginButton = new JButton("Login with Browser");
++    private final JButton microsoftDeviceLoginButton = new JButton("Login with Device Code");
+     private final JProgressBar progressBar = new JProgressBar();
+ 
+     public LogInPopup(Launcher var1, LogInPopup.Callback var2) {
+@@ -105,7 +105,7 @@ public class LogInPopup extends JPanel implements ActionListener {
+         microsoftLoginButton.setAlignmentX(Component.CENTER_ALIGNMENT);
+         microsoftDeviceLoginButton.setAlignmentX(Component.CENTER_ALIGNMENT);
+ 
+-        //var6.add(microsoftLoginButton);
++        var6.add(microsoftLoginButton);
+         var6.add(microsoftDeviceLoginButton);
+ 
+         this.add(var6);
+diff --git a/src/main/java/net/minecraft/launcher/updater/MinecraftVersionManager.java b/src/main/java/net/minecraft/launcher/updater/MinecraftVersionManager.java
+index 77bb3a1..95b5886 100644
+--- a/src/main/java/net/minecraft/launcher/updater/MinecraftVersionManager.java
++++ b/src/main/java/net/minecraft/launcher/updater/MinecraftVersionManager.java
+@@ -74,9 +74,9 @@ public class MinecraftVersionManager implements VersionManager {
+         }
+ 
+         try {
+-            LOGGER.info("Refreshing local version list...");
++            LOGGER.debug("Refreshing local version list...");
+             this.localVersionList.refreshVersions();
+-            LOGGER.info("Refreshing remote version list...");
++            LOGGER.debug("Refreshing remote version list...");
+             this.remoteVersionList.refreshVersions();
+ 
+             // olauncher start - lazy custom type finder, TODO: integrity check
+@@ -95,7 +95,7 @@ public class MinecraftVersionManager implements VersionManager {
+             throw var7;
+         }
+ 
+-        LOGGER.info("Refresh complete.");
++        LOGGER.info("Version lists refreshed.");
+         synchronized(this.refreshLock) {
+             this.isRefreshing = false;
+         }
+@@ -406,14 +406,14 @@ public class MinecraftVersionManager implements VersionManager {
+             ((LocalVersionList)var2).saveVersion((CompleteVersion)var1);
+         }
+ 
+-        LOGGER.info("Installed " + var1);
++        LOGGER.debug("Installed " + var1);
+     }
+ 
+     public void uninstallVersion(CompleteVersion var1) throws IOException {
+         VersionList var2 = this.getLocalVersionList();
+         if (var2 instanceof LocalVersionList) {
+             var2.uninstallVersion(var1);
+-            LOGGER.info("Uninstalled " + var1);
++            LOGGER.debug("Uninstalled " + var1);
+         }
+ 
+     }
+-- 
+2.53.0
+

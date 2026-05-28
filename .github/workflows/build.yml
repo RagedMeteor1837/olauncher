@@ -8,20 +8,33 @@
 
 name: Java CI with Maven
 
+permissions: read-all
+
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "master", "dev" ]
     tags: [ "v*", "ci-test/**" ]
+    paths-ignore:
+      - '**.md'
+      - '**.txt'
+      - 'LICENSE'
+      - '.gitignore'
   pull_request:
-    branches: [ "master" ]
+    branches: [ "master", "dev" ]
+    paths-ignore:
+      - '**.md'
+      - '**.txt'
+      - 'LICENSE'
+      - '.gitignore'
 
 jobs:
   build:
     runs-on: ubuntu-latest
     outputs:
       artifact-id: ${{ steps.upload-artifact.outputs.artifact-id }}
+      outer-sha: ${{ steps.compute-versions.outputs.outer-sha }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: recursive
         fetch-tags: true
@@ -34,7 +47,7 @@ jobs:
         git config --global user.name olauncher
         git config --global core.autocrlf input
     - name: Set up JDK 11
-      uses: actions/setup-java@v4
+      uses: actions/setup-java@v5
       with:
         java-version: '11'
         distribution: 'temurin'
@@ -46,13 +59,16 @@ jobs:
         bash init.sh
         bash applyPatches.sh
     - name: Compute versions
+      id: compute-versions
       run: |
-        echo "OUTER_DESCR=$(git describe --tags --dirty --always || echo unknown)" >> $GITHUB_ENV
-        echo "OUTER_SHA=$(git rev-parse --short=12 HEAD)" >> $GITHUB_ENV
+        echo "OUTER_DESCR=$(git describe --tags --dirty --always --match 'v*' || echo unknown)" >> $GITHUB_ENV
+        OUTER_SHA_VAL=$(git rev-parse --short=7 HEAD)
+        echo "OUTER_SHA=$OUTER_SHA_VAL" >> $GITHUB_ENV
+        echo "outer-sha=$(date -u +%Y%m%d)-$OUTER_SHA_VAL" >> $GITHUB_OUTPUT
         if [ -z "$(git status --porcelain)" ]; then echo "OUTER_DIRTY=clean" >> $GITHUB_ENV; else echo "OUTER_DIRTY=dirty" >> $GITHUB_ENV; fi
         pushd olauncher >/dev/null
         echo "INNER_DESCR=$(git describe --tags --dirty --always || echo unknown)" >> $GITHUB_ENV
-        echo "INNER_SHA=$(git rev-parse --short=12 HEAD)" >> $GITHUB_ENV
+        echo "INNER_SHA=$(git rev-parse --short=7 HEAD)" >> $GITHUB_ENV
         if [ -z "$(git status --porcelain)" ]; then echo "INNER_DIRTY=clean" >> $GITHUB_ENV; else echo "INNER_DIRTY=dirty" >> $GITHUB_ENV; fi
         popd >/dev/null
     - name: Build with Maven
@@ -67,14 +83,18 @@ jobs:
           -Dinner.dirty="${{ env.INNER_DIRTY }}"
     - name: Generate redistributable
       run: bash genredist.sh
+    - name: Rename dev build artifact
+      if: github.ref == 'refs/heads/dev'
+      run: |
+        mv olauncher-*-redist.jar olauncher-${{ env.OUTER_SHA }}-redist.jar    
     - name: Upload redistributable
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       id: upload-artifact
       with:
         name: OLauncher Redistributable JAR
         path: olauncher-*-redist.jar
 
-  draft-release:
+  draft-master-release:
     if: ${{ github.ref_type == 'tag' }}
     needs: build
     runs-on: ubuntu-latest
@@ -82,7 +102,7 @@ jobs:
       contents: write
     steps:
       - name: Download redistributable jar
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         id: download-artifact
         with:
           artifact-ids: ${{ needs.build.outputs.artifact-id }}
@@ -94,4 +114,41 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           ARTIFACT_PATH: ${{ steps.download-artifact.outputs.download-path }}
-        run: gh release create "$RELEASE_TAG" --draft --verify-tag --title "$RELEASE_TAG" "$ARTIFACT_PATH"/*.jar
+        run: |
+          REDIST_SHA256=$(sha256sum "$ARTIFACT_PATH"/*.jar | awk '{print $1}')
+          NOTES="redist-sha256: $REDIST_SHA256"
+          gh release create "$RELEASE_TAG" --draft --verify-tag --title "$RELEASE_TAG" \
+            --notes "$NOTES" \
+            "$ARTIFACT_PATH"/*.jar
+
+  dev-release:
+    if: ${{ github.ref == 'refs/heads/dev' }}
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download redistributable jar
+        uses: actions/download-artifact@v7
+        id: download-artifact
+        with:
+          artifact-ids: ${{ needs.build.outputs.artifact-id }}
+          merge-multiple: true
+          path: redist
+      - name: Create dev pre-release
+        env:
+          DEV_TAG: dev-${{ needs.build.outputs.outer-sha }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          ARTIFACT_PATH: ${{ steps.download-artifact.outputs.download-path }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          REDIST_SHA256=$(sha256sum "$ARTIFACT_PATH"/*.jar | awk '{print $1}')
+          NOTES=$(printf 'build-sha: %s\nredist-sha256: %s' "$COMMIT_SHA" "$REDIST_SHA256")
+          gh release create "$DEV_TAG" \
+            --draft \
+            --prerelease \
+            --title "$DEV_TAG" \
+            --notes "$NOTES" \
+            --target "$COMMIT_SHA" \
+            "$ARTIFACT_PATH"/*.jar

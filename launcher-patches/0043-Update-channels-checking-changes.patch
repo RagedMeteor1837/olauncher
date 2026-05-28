@@ -1,0 +1,1704 @@
+From 86428ae22ca6a3c6db0995421af4db69eac3f059 Mon Sep 17 00:00:00 2001
+From: RagedMeteor1837 <148640131+RagedMeteor1837@users.noreply.github.com>
+Date: Sun, 29 Mar 2026 20:34:46 +0100
+Subject: [PATCH] Update channels & checking changes
+
+
+diff --git a/pom.xml b/pom.xml
+index 13ad9bd..cb29589 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -112,13 +112,15 @@
+                             <generateGitPropertiesFilename>${project.build.outputDirectory}/ver/git-outer.properties</generateGitPropertiesFilename>
+                             <dotGitDirectory>../.git</dotGitDirectory>
+                             <gitDescribe>
+-                                <tags>true</tags> <!-- include unannotated tags (occurs during shallow clones) -->
++                                <tags>true</tags> 
++                                <match>v*</match> 
+                             </gitDescribe>
+                             <includeOnlyProperties>
+                                 <property>^git.closest.tag.name$</property>
+                                 <property>^git.closest.tag.commit.count$</property>
+                                 <property>^git.dirty$</property>
+                                 <property>^git.commit.id.abbrev$</property>
++                                <property>^git.commit.id$</property>
+                             </includeOnlyProperties>
+                         </configuration>
+                     </execution>
+diff --git a/src/main/java/dev/figboot/olauncher/OLauncherConstants.java b/src/main/java/dev/figboot/olauncher/OLauncherConstants.java
+index 7a1909a..170033c 100644
+--- a/src/main/java/dev/figboot/olauncher/OLauncherConstants.java
++++ b/src/main/java/dev/figboot/olauncher/OLauncherConstants.java
+@@ -1,6 +1,8 @@
+ package dev.figboot.olauncher;
+ 
+ import java.net.URL;
++import java.time.temporal.ChronoUnit;
++import java.time.temporal.TemporalUnit;
+ import java.util.UUID;
+ 
+ import static net.minecraft.launcher.LauncherConstants.constantURL;
+@@ -8,11 +10,26 @@ import static net.minecraft.launcher.LauncherConstants.constantURL;
+ public final class OLauncherConstants {
+     private OLauncherConstants() { }
+ 
++    // Auth
+     public static final String MC_LOGIN_URL = "https://login.live.com/oauth20_authorize.srf?client_id=00000000402b5328&response_type=code&scope=service%3A%3Auser.auth.xboxlive.com%3A%3AMBI_SSL&redirect_uri=https%3A%2F%2Flogin.live.com%2Foauth20_desktop.srf";
+     public static final UUID APP_CLIENT_ID = UUID.fromString("60b6cc54-fc07-4bab-bca9-cbe9aa713c80");
+     public static final String APP_SCOPES = "XboxLive.signin offline_access";
+     public static final int REDIR_URI_PORT = 6183;
+     public static final String REDIR_URI = "http://localhost:" + REDIR_URI_PORT;
++    public static final String AUTH_CODE_URL = "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize";
++    public static final URL ROUTE_LOGIN_LIVE_TOKEN = constantURL("https://login.live.com/oauth20_token.srf");
++    public static final URL DEVICE_CODE_URL = constantURL("https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode");
++    public static final URL DEVICE_CODE_HEARTBEAT_URL = constantURL("https://login.microsoftonline.com/consumers/oauth2/v2.0/token");
++    public static final URL ROUTE_MS_TOKEN = DEVICE_CODE_HEARTBEAT_URL;
+ 
++    // Runtime
+     public static final URL JRE_MANIFEST_URL = constantURL("https://launchermeta.mojang.com/v1/products/java-runtime/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json");
++
++    // Updater
++    public static final URL GITHUB_LATEST_RELEASE_URL = constantURL("https://api.github.com/repos/RagedMeteor1837/olauncher/releases/latest");
++    public static final URL GITHUB_RELEASES_URL = constantURL("https://api.github.com/repos/RagedMeteor1837/olauncher/releases?per_page=100");
++    public static final long UPDATE_CHECK_FREQ = 3;
++    public static final TemporalUnit UPDATE_CHECK_FREQ_UNIT = ChronoUnit.HOURS;
++    public static final String INFO_FILE_NAME = "olauncher_update.json";
++    public static final String EXPECTED_MAIN_CLASS = "dev.figboot.autool.AutoOL";
+ }
+diff --git a/src/main/java/dev/figboot/olauncher/auth/MSLoginServer.java b/src/main/java/dev/figboot/olauncher/auth/MSLoginServer.java
+index bb9cb51..ada5ca8 100644
+--- a/src/main/java/dev/figboot/olauncher/auth/MSLoginServer.java
++++ b/src/main/java/dev/figboot/olauncher/auth/MSLoginServer.java
+@@ -10,6 +10,7 @@ import java.io.BufferedReader;
+ import java.io.IOException;
+ import java.io.InputStream;
+ import java.io.InputStreamReader;
++import java.io.OutputStream;
+ import java.net.*;
+ import java.nio.charset.StandardCharsets;
+ import java.util.function.Consumer;
+@@ -116,15 +117,41 @@ public class MSLoginServer {
+             }
+ 
+             try (InputStream is = client.getInputStream()) {
++                OutputStream out = client.getOutputStream();
+                 BufferedReader br = new BufferedReader(new InputStreamReader(is));
+                 String line;
+-                Matcher matcher;
+-                while ((line = br.readLine()) != null) {
+-                    if ((matcher = GET_RQ_PATTERN.matcher(line)).matches()) {
+-                        String code = matcher.group(1);
+-                        LOGGER.info("GET request received (/)");
+-                        client.getOutputStream().write("HTTP/1.1 301 Moved Permanently\r\n".getBytes(StandardCharsets.UTF_8));
+-                        client.getOutputStream().write("Location: /authComplete\r\n\r\n".getBytes(StandardCharsets.UTF_8));
++                line = br.readLine();
++                if (line == null) continue;
++
++                Matcher reqMatcher = GET_REQUEST_LINE.matcher(line);
++                if (!reqMatcher.matches()) continue;
++
++                String path = reqMatcher.group(1);
++
++                if (path.startsWith("/authComplete")) {
++                    LOGGER.info("GET request received (/authComplete)");
++                    String content = "The code has been received. You may now close this window.";
++                    byte[] contentBytes = content.getBytes(StandardCharsets.UTF_8);
++                    out.write("HTTP/1.1 200 OK\r\n".getBytes(StandardCharsets.UTF_8));
++                    out.write("Content-type: text/plain\r\n".getBytes(StandardCharsets.UTF_8));
++                    out.write(("Content-length: " + contentBytes.length + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
++                    out.write(contentBytes);
++
++                    synchronized (stateVarLock) { stop = true; }
++                    synchronized (handlerSync) {
++                        if (!handlerCalled) handleComplete.accept(new Response(null, null, null));
++                        handlerCalled = true;
++                    }
++
++                } else {
++                    Matcher codeMatcher  = QUERY_CODE.matcher(path);
++                    Matcher errorMatcher = QUERY_ERROR.matcher(path);
++
++                    if (codeMatcher.find()) {
++                        String code = URLDecoder.decode(codeMatcher.group(1), "UTF-8");
++                        LOGGER.info("GET request received (/) - code obtained");
++                        out.write("HTTP/1.1 301 Moved Permanently\r\n".getBytes(StandardCharsets.UTF_8));
++                        out.write("Location: /authComplete\r\n\r\n".getBytes(StandardCharsets.UTF_8));
+ 
+                         synchronized (handlerSync) {
+                             if (!handlerCalled) handleComplete.accept(new Response(code, null, null));
+@@ -139,10 +166,10 @@ public class MSLoginServer {
+ 
+                         String content = "The authorization has been cancelled. You may now close this window.";
+                         byte[] contentBytes = content.getBytes(StandardCharsets.UTF_8);
+-                        client.getOutputStream().write("HTTP/1.1 200 OK\r\n".getBytes(StandardCharsets.UTF_8));
+-                        client.getOutputStream().write("Content-type: text/plain\r\n".getBytes(StandardCharsets.UTF_8));
+-                        client.getOutputStream().write(("Content-length: " + contentBytes.length + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+-                        client.getOutputStream().write(contentBytes);
++                        out.write("HTTP/1.1 200 OK\r\n".getBytes(StandardCharsets.UTF_8));
++                        out.write("Content-type: text/plain\r\n".getBytes(StandardCharsets.UTF_8));
++                        out.write(("Content-length: " + contentBytes.length + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
++                        out.write(contentBytes);
+ 
+                         synchronized (stateVarLock) {
+                             stop = true;
+@@ -174,7 +201,8 @@ public class MSLoginServer {
+ 
+                         break;
+                     } else {
+-                        client.getOutputStream().write("HTTP/1.1 404 Not Found\r\n\r\n".getBytes(StandardCharsets.UTF_8));
++                        LOGGER.warn("Unrecognised GET path: {}", path);
++                        out.write("HTTP/1.1 404 Not Found\r\n\r\n".getBytes(StandardCharsets.UTF_8));
+                     }
+                 }
+             }
+diff --git a/src/main/java/dev/figboot/olauncher/auth/MicrosoftAuthenticationService.java b/src/main/java/dev/figboot/olauncher/auth/MicrosoftAuthenticationService.java
+index 4576fea..6afa810 100644
+--- a/src/main/java/dev/figboot/olauncher/auth/MicrosoftAuthenticationService.java
++++ b/src/main/java/dev/figboot/olauncher/auth/MicrosoftAuthenticationService.java
+@@ -28,15 +28,12 @@ import java.util.function.Function;
+ public class MicrosoftAuthenticationService extends YggdrasilAuthenticationService {
+     private static final Logger LOGGER = LogManager.getLogger();
+ 
+-    public static final URL ROUTE_LOGIN_LIVE_TOKEN = constantURL("https://login.live.com/oauth20_token.srf");
+     public static final URL ROUTE_XBOXLIVE_AUTH = constantURL("https://user.auth.xboxlive.com/user/authenticate");
+     public static final URL ROUTE_XBOXLIVE_XSTS = constantURL("https://xsts.auth.xboxlive.com/xsts/authorize");
+     public static final URL ROUTE_MINECRAFT_XBOX_LOGIN = constantURL("https://api.minecraftservices.com/authentication/login_with_xbox");
+     public static final URL ROUTE_MINECRAFT_PROFILE = constantURL("https://api.minecraftservices.com/minecraft/profile");
+     public static final URL ROUTE_MINECRAFT_PROFILE_SKINS_ACTIVE = constantURL("https://api.minecraftservices.com/minecraft/profile/skins/active");
+ 
+-    public static final URL DEVICE_CODE_URL = constantURL("https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode");
+-    public static final URL DEVICE_CODE_HEARTBEAT_URL = constantURL("https://login.microsoftonline.com/consumers/oauth2/v2.0/token");
+     public static final URL ENTITLEMENTS_URL = constantURL("https://api.minecraftservices.com/entitlements");
+ 
+     private final Gson gson;
+@@ -149,37 +146,6 @@ public class MicrosoftAuthenticationService extends YggdrasilAuthenticationServi
+         return makeRequest(url, null, null, token, s -> gson.fromJson(s, clazz));
+     }
+ 
+-    protected static class FormURLEncodedBuilder {
+-        private final StringBuilder data;
+-        private boolean firstParam = true;
+-
+-        public FormURLEncodedBuilder(String base) {
+-            data = new StringBuilder(base);
+-        }
+-
+-        public FormURLEncodedBuilder append(String key, String val) {
+-            if (firstParam) {
+-                firstParam = false;
+-            } else {
+-                data.append("&");
+-            }
+-
+-            try {
+-                data.append(URLEncoder.encode(key, "UTF-8"));
+-                data.append("=");
+-                data.append(URLEncoder.encode(val, "UTF-8"));
+-            } catch (UnsupportedEncodingException ex) {
+-                throw new RuntimeException(ex);
+-            }
+-
+-            return this;
+-        }
+-
+-        public String build() {
+-            return data.toString();
+-        }
+-    }
+-
+     public static class FormBuilder {
+         private final StringBuilder builder = new StringBuilder();
+ 
+diff --git a/src/main/java/dev/figboot/olauncher/auth/MicrosoftUserAuthentication.java b/src/main/java/dev/figboot/olauncher/auth/MicrosoftUserAuthentication.java
+index c8b0326..9b1c67e 100644
+--- a/src/main/java/dev/figboot/olauncher/auth/MicrosoftUserAuthentication.java
++++ b/src/main/java/dev/figboot/olauncher/auth/MicrosoftUserAuthentication.java
+@@ -9,25 +9,11 @@ import dev.figboot.olauncher.auth.requests.MinecraftXboxLoginRequest;
+ import dev.figboot.olauncher.auth.requests.XSTSAuthRequest;
+ import dev.figboot.olauncher.auth.requests.XboxLiveAuthRequest;
+ import dev.figboot.olauncher.auth.responses.*;
+-import dev.figboot.olauncher.auth.ui.GameProfileFixDialog;
+ import lombok.Getter;
+ import org.apache.commons.lang3.StringUtils;
+ import org.apache.logging.log4j.LogManager;
+ import org.apache.logging.log4j.Logger;
+ 
+-import javax.imageio.ImageIO;
+-import javax.swing.*;
+-import java.awt.image.BufferedImage;
+-import java.io.IOException;
+-import java.io.InputStream;
+-import java.io.UnsupportedEncodingException;
+-import java.lang.reflect.InvocationTargetException;
+-import java.math.BigInteger;
+-import java.net.HttpURLConnection;
+-import java.net.MalformedURLException;
+-import java.net.URL;
+-import java.net.URLEncoder;
+-import java.security.SecureRandom;
+ import java.time.Instant;
+ import java.time.format.DateTimeParseException;
+ import java.time.temporal.ChronoUnit;
+@@ -56,20 +42,9 @@ public class MicrosoftUserAuthentication extends HttpUserAuthentication {
+ 
+     private final MinecraftSessionService sessionService;
+ 
+-    private BufferedImage ofCape;
+-
+     public MicrosoftUserAuthentication(MicrosoftAuthenticationService service, Agent agent) {
+         super(service);
+         this.agent = agent;
+-        profiles = null;
+-
+-        msRefreshToken = null;
+-        mojToken = null;
+-        online = false;
+-
+-        msLoginRes = null;
+-        msDeviceLoginRes = null;
+-
+         sessionService = service.createMinecraftSessionService();
+     }
+ 
+@@ -79,7 +54,7 @@ public class MicrosoftUserAuthentication extends HttpUserAuthentication {
+ 
+         return !canPlayOnline() && (StringUtils.isNotBlank(msRefreshToken)
+                 || (StringUtils.isNotBlank(xblToken) && xblTokenValid(later))
+-                || (StringUtils.isNotBlank(mojToken) && xblTokenValid(later)));
++                || (StringUtils.isNotBlank(mojToken) && mojTokenValid(later)));
+     }
+ 
+     @Override
+@@ -139,13 +114,8 @@ public class MicrosoftUserAuthentication extends HttpUserAuthentication {
+                 return false;
+             }
+ 
+-            for (MinecraftEntitlementsResponse.EntitlementItem item : entitlementRes.getItems()) {
+-                if (item.getName().equals("product_minecraft") || item.getName().equals("game_minecraft")) {
+-                    return true;
+-                }
+-            }
+-
+-            return false;
++            return entitlementRes.getItems().stream()
++                    .anyMatch(item -> item.getName().equals("product_minecraft") || item.getName().equals("game_minecraft"));
+         } catch (AuthenticationException ex) {
+             LOGGER.warn("Unable to check game ownership (likely offline). Assuming demo mode.", ex);
+             return false;
+@@ -157,7 +127,7 @@ public class MicrosoftUserAuthentication extends HttpUserAuthentication {
+         MSTokenAuthResponse tokAuthRes;
+ 
+         try {
+-            tokAuthRes = getAuthenticationService().postForm(MicrosoftAuthenticationService.ROUTE_LOGIN_LIVE_TOKEN,
++            tokAuthRes = getAuthenticationService().postForm(OLauncherConstants.ROUTE_MS_TOKEN,
+                     form -> {
+                         form.append("client_id", OLauncherConstants.APP_CLIENT_ID.toString());
+                         form.append("code", msAuthCode);
+@@ -179,7 +149,7 @@ public class MicrosoftUserAuthentication extends HttpUserAuthentication {
+         MSTokenAuthResponse tokAuthRes;
+ 
+         try {
+-            tokAuthRes = getAuthenticationService().postForm(MicrosoftAuthenticationService.ROUTE_LOGIN_LIVE_TOKEN,
++            tokAuthRes = getAuthenticationService().postForm(OLauncherConstants.ROUTE_MS_TOKEN,
+                     form -> {
+                         form.append("client_id", OLauncherConstants.APP_CLIENT_ID.toString());
+                         form.append("refresh_token", msRefreshToken);
+@@ -222,7 +192,7 @@ public class MicrosoftUserAuthentication extends HttpUserAuthentication {
+ 
+             if (error == 2148916238L) {
+                 throw new AuthenticationException(String.format("Account is held by a minor outside of a family. %d (%s)", error, message), ex);
+-            } else if (ex.getResponse().getXError() == 2148916233L) {
++            } else if (error == 2148916233L) {
+                 throw new AuthenticationException(String.format("Account is not on Xbox. %d (%s)", error, message), ex);
+             } else {
+                 throw new AuthenticationException(String.format("Unknown Xbox XSTS error. %d (%s)", error, message), ex);
+@@ -327,58 +297,6 @@ public class MicrosoftUserAuthentication extends HttpUserAuthentication {
+ 
+         setUserid(userId);
+         setUserType(UserType.MICROSOFT);
+-
+-        /*try {
+-            refreshOptiFineCape();
+-        } catch (IOException ex) {
+-            throw new AuthenticationException("IO error while loading OptiFine cape", ex);
+-        }*/
+-    }
+-
+-    public void refreshOptiFineCape() throws IOException {
+-        URL url = new URL(String.format("http://s.optifine.net/capes/%s.png", URLEncoder.encode(profileInfo.getName(), "UTF-8")));
+-
+-        HttpURLConnection conn = (HttpURLConnection)url.openConnection(this.getAuthenticationService().getProxy());
+-        int code = conn.getResponseCode();
+-        if (code != 200) {
+-            ofCape = null;
+-
+-            if (code != 404) {
+-                LOGGER.error("Server replied with error when querying OptiFine cape: {} {}", code, conn.getResponseMessage());
+-            }
+-
+-            return;
+-        }
+-
+-        try (InputStream is = conn.getInputStream()) {
+-            ofCape = ImageIO.read(is);
+-        }
+-    }
+-
+-    public boolean hasOptiFineCape() {
+-        return ofCape != null;
+-    }
+-
+-    public BufferedImage getOptiFineCapeTexture() {
+-        return ofCape; // mutable D:
+-    }
+-
+-    public URL createOptiFineCapeEditor() throws AuthenticationException, MalformedURLException {
+-        if (getSelectedProfile() == null) throw new AuthenticationException("You must be logged in to open the cape editor");
+-        if (!mojTokenValid(Instant.now()))
+-            throw new AuthenticationException("Your Mojang token is invalid. Please restart the launcher.");
+-
+-        String serverID = new BigInteger(128, new SecureRandom()).toString(16);
+-
+-        sessionService.joinServer(getSelectedProfile(), mojToken, serverID);
+-        try {
+-            return new URL(String.format("https://optifine.net/capeChange?u=%s&n=%s&s=%s",
+-                    URLEncoder.encode(profileInfo.getId().toString().replace("-", ""), "UTF-8"),
+-                    URLEncoder.encode(profileInfo.getName(), "UTF-8"),
+-                    URLEncoder.encode(serverID, "UTF-8")));
+-        } catch (UnsupportedEncodingException ex) {
+-            throw new RuntimeException("Error URLEncoding the cape change URL", ex);
+-        }
+     }
+ 
+     public MCProfileInfo getProfileInfo() {
+@@ -391,7 +309,6 @@ public class MicrosoftUserAuthentication extends HttpUserAuthentication {
+ 
+         msRefreshToken = null;
+         mojToken = null;
+-        //msAuthCode = null;
+         profileInfo = null;
+         online = false;
+     }
+@@ -404,10 +321,6 @@ public class MicrosoftUserAuthentication extends HttpUserAuthentication {
+         return xblToken != null && xblTokenExpire != null && !now.isAfter(xblTokenExpire);
+     }
+ 
+-    private boolean refreshTokenValid() {
+-        return msRefreshToken != null;
+-    }
+-
+     public void setLoginResponse(MSLoginServer.Response code) {
+         msLoginRes = code;
+     }
+@@ -478,7 +391,7 @@ public class MicrosoftUserAuthentication extends HttpUserAuthentication {
+     }
+ 
+     public MSDeviceCodeResponse startDeviceAuth() throws AuthenticationException {
+-        return getAuthenticationService().postForm(MicrosoftAuthenticationService.DEVICE_CODE_URL,
++        return getAuthenticationService().postForm(OLauncherConstants.DEVICE_CODE_URL,
+                 form -> {
+                     form.append("client_id", OLauncherConstants.APP_CLIENT_ID.toString());
+                     form.append("scope", OLauncherConstants.APP_SCOPES);
+@@ -486,7 +399,7 @@ public class MicrosoftUserAuthentication extends HttpUserAuthentication {
+     }
+ 
+     public MSDeviceCodeHeartbeatResponse checkDeviceAuth(String deviceCode) throws AuthenticationException {
+-        return getAuthenticationService().postForm(MicrosoftAuthenticationService.DEVICE_CODE_HEARTBEAT_URL,
++        return getAuthenticationService().postForm(OLauncherConstants.DEVICE_CODE_HEARTBEAT_URL,
+                 form -> {
+                     form.appendNoEncode("grant_type", "urn:ietf:params:oauth:grant-type:device_code");
+                     form.append("client_id", OLauncherConstants.APP_CLIENT_ID.toString());
+diff --git a/src/main/java/dev/figboot/olauncher/launcher/LauncherVersion.java b/src/main/java/dev/figboot/olauncher/launcher/LauncherVersion.java
+index 5e73013..6efa8f4 100644
+--- a/src/main/java/dev/figboot/olauncher/launcher/LauncherVersion.java
++++ b/src/main/java/dev/figboot/olauncher/launcher/LauncherVersion.java
+@@ -39,7 +39,7 @@ public final class LauncherVersion {
+         return new LauncherVersion(innerProps, outerProps);
+     }
+ 
+-    @Getter private final String tag, commitId;
++    @Getter private final String tag, commitId, fullCommitId;
+     private final String tagSan;
+     @Getter private final boolean dirty, devVersion;
+ 
+@@ -58,6 +58,7 @@ public final class LauncherVersion {
+                 || outer.getProperty("git.dirty").equalsIgnoreCase("true");
+ 
+         commitId = outer.getProperty("git.commit.id.abbrev");
++        fullCommitId = outer.getProperty("git.commit.id");
+     }
+ 
+     private LauncherVersion() {
+@@ -66,6 +67,7 @@ public final class LauncherVersion {
+         devVersion = true;
+         dirty = false;
+         commitId = "???";
++        fullCommitId = null;
+     }
+ 
+     @Override
+@@ -73,19 +75,14 @@ public final class LauncherVersion {
+         if (toStringCache != null) return toStringCache;
+ 
+         StringBuilder sb = new StringBuilder();
+-        sb.append(tagSan);
+-
+-        if (devVersion) {
+-            sb.append("-dev");
+-        }
+ 
+         if (devVersion || dirty) {
+-            sb.append("-");
+-            sb.append(commitId);
+-        }
+-
+-        if (dirty) {
+-            sb.append("-dirty");
++            if (devVersion) sb.append("dev");
++            else sb.append("dirty");
++            sb.append("-").append(commitId);
++            if (devVersion && dirty) sb.append("-dirty");
++        } else {
++            sb.append(tagSan);
+         }
+ 
+         return toStringCache = sb.toString();
+diff --git a/src/main/java/dev/figboot/olauncher/launcher/runtime/JavaRuntimeManager.java b/src/main/java/dev/figboot/olauncher/launcher/runtime/JavaRuntimeManager.java
+index ec2e6a1..7270683 100644
+--- a/src/main/java/dev/figboot/olauncher/launcher/runtime/JavaRuntimeManager.java
++++ b/src/main/java/dev/figboot/olauncher/launcher/runtime/JavaRuntimeManager.java
+@@ -239,9 +239,6 @@ public class JavaRuntimeManager {
+             if (!(entry.getValue() instanceof RuntimeFileFile)) continue;
+             file = (RuntimeFileFile)entry.getValue();
+             path = runtimeRoot.resolve(entry.getKey());
+-            if (file.getRaw() == null) {
+-                LOGGER.warn(entry.getKey() + " AAAAAAAAa");
+-            }
+             downloadables.add(new RuntimeFileDownloadable(proxy, entry.getKey(), objectsRoot, path, file));
+         }
+         job.addDownloadables(downloadables);
+diff --git a/src/main/java/dev/figboot/olauncher/launcher/update/LauncherSelfUpdater.java b/src/main/java/dev/figboot/olauncher/launcher/update/LauncherSelfUpdater.java
+new file mode 100644
+index 0000000..bf8ad76
+--- /dev/null
++++ b/src/main/java/dev/figboot/olauncher/launcher/update/LauncherSelfUpdater.java
+@@ -0,0 +1,296 @@
++// LauncherSelfUpdater.java
++
++package dev.figboot.olauncher.launcher.update;
++
++import com.mojang.launcher.OperatingSystem;
++import dev.figboot.olauncher.OLauncherConstants;
++import dev.figboot.olauncher.launcher.LauncherVersion;
++import net.minecraft.launcher.Launcher;
++import net.minecraft.launcher.Main;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
++
++import javax.swing.*;
++import javax.swing.border.EmptyBorder;
++import java.awt.*;
++import java.io.*;
++import java.net.HttpURLConnection;
++import java.net.Proxy;
++import java.net.URL;
++import java.nio.file.Files;
++import java.nio.file.StandardCopyOption;
++import java.security.DigestInputStream;
++import java.security.MessageDigest;
++import java.security.NoSuchAlgorithmException;
++import java.util.ArrayList;
++import java.util.Arrays;
++import java.util.List;
++import java.util.jar.JarFile;
++
++public class LauncherSelfUpdater {
++    private static final Logger LOGGER = LogManager.getLogger();
++
++    private static final List<String> JVM_INTERNAL_PREFIXES = Arrays.asList(
++            "java.", "javax.", "sun.", "jdk.", "com.sun.", "os.", "file.", "line.", "path.", "user."
++    );
++
++    private final LauncherUpdateChecker checker;
++    private final ReleaseInfo release;
++    private final ReleaseInfo.Asset asset;
++
++    public LauncherSelfUpdater(LauncherUpdateChecker checker, ReleaseInfo release, ReleaseInfo.Asset asset) {
++        this.checker = checker;
++        this.release = release;
++        this.asset = asset;
++    }
++
++    public void startUpdate(JFrame owner) {
++        JDialog dlg = new JDialog(owner, "Downloading Update", true);
++        dlg.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
++        dlg.setLayout(new BorderLayout(10, 10));
++
++        JLabel statusLabel = new JLabel("Preparing download...");
++        statusLabel.setBorder(new EmptyBorder(10, 15, 5, 15));
++
++        long totalBytes = asset.getSize();
++        JProgressBar progressBar = new JProgressBar(0, totalBytes > 0 ? (int) Math.min(totalBytes, Integer.MAX_VALUE) : 100);
++        progressBar.setBorder(new EmptyBorder(0, 15, 0, 15));
++        progressBar.setStringPainted(true);
++        if (totalBytes <= 0) progressBar.setIndeterminate(true);
++
++        JButton cancelButton = new JButton("Cancel");
++        JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
++        btnPanel.setBorder(new EmptyBorder(0, 0, 5, 0));
++        btnPanel.add(cancelButton);
++
++        dlg.add(statusLabel, BorderLayout.NORTH);
++        dlg.add(progressBar, BorderLayout.CENTER);
++        dlg.add(btnPanel, BorderLayout.SOUTH);
++        dlg.pack();
++        dlg.setMinimumSize(new Dimension(420, dlg.getHeight()));
++        dlg.setLocationRelativeTo(owner);
++
++        SwingWorker<File, Void> worker = new SwingWorker<File, Void>() {
++            @Override
++            protected File doInBackground() throws Exception {
++                return downloadAsset(statusLabel, progressBar);
++            }
++
++            @Override
++            protected void done() {
++                dlg.dispose();
++                if (isCancelled()) return;
++                try {
++                    File jar = get();
++                    onDownloadComplete(jar, owner);
++                } catch (java.util.concurrent.ExecutionException ex) {
++                    Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
++                    LOGGER.error("Update download failed", cause);
++                    JOptionPane.showMessageDialog(owner,
++                            "Update failed:\n" + cause.getMessage(),
++                            "Update Error", JOptionPane.ERROR_MESSAGE);
++                } catch (Exception ex) {
++                    LOGGER.error("Unexpected error during update", ex);
++                }
++            }
++        };
++
++        cancelButton.addActionListener(e -> worker.cancel(true));
++        worker.execute();
++        dlg.setVisible(true);
++    }
++
++    private File downloadAsset(JLabel statusLabel, JProgressBar progressBar) throws Exception {
++        File workDir = Launcher.getCurrentInstance().getLauncher().getWorkingDirectory();
++        File autoolDir = new File(workDir, "autool");
++        if (!autoolDir.isDirectory()) autoolDir.mkdirs();
++
++        File tempFile = File.createTempFile("olauncher-update-", ".jar.tmp", autoolDir);
++        tempFile.deleteOnExit();
++
++        try {
++            SwingUtilities.invokeLater(() -> statusLabel.setText("Downloading " + asset.getName() + "..."));
++            LOGGER.info("Downloading update from {}", asset.getDownloadURL());
++
++            Proxy proxy = Launcher.getCurrentInstance().getLauncher().getProxy();
++            MessageDigest sha256 = newSha256();
++            long downloaded = 0;
++            long total = asset.getSize();
++
++            HttpURLConnection conn = openConnection(asset.getDownloadURL(), proxy);
++            try (InputStream raw = conn.getInputStream();
++                 DigestInputStream in = new DigestInputStream(new BufferedInputStream(raw), sha256);
++                 OutputStream out = new BufferedOutputStream(new FileOutputStream(tempFile))) {
++
++                byte[] buf = new byte[8192];
++                int read;
++                while ((read = in.read(buf)) != -1) {
++                    if (Thread.currentThread().isInterrupted()) {
++                        throw new InterruptedException("Download cancelled by user");
++                    }
++                    out.write(buf, 0, read);
++                    downloaded += read;
++                    final long dl = downloaded;
++                    SwingUtilities.invokeLater(() -> {
++                        if (total > 0) {
++                            progressBar.setValue((int) Math.min(dl, Integer.MAX_VALUE));
++                            progressBar.setString(String.format("%.0f / %.0f KB", dl / 1024.0, total / 1024.0));
++                        } else {
++                            progressBar.setString(String.format("%.0f KB", dl / 1024.0));
++                        }
++                    });
++                }
++            } finally {
++                conn.disconnect();
++            }
++
++            SwingUtilities.invokeLater(() -> statusLabel.setText("Verifying..."));
++
++            // SHA-256 check — requires release notes to contain: redist-sha256: <64 hex chars>
++            String expectedSha256 = release.getRedistSha256();
++            String actualSha256 = bytesToHex(sha256.digest());
++            if (expectedSha256 != null) {
++                if (!actualSha256.equalsIgnoreCase(expectedSha256)) {
++                    throw new IOException(
++                            "SHA-256 mismatch — the download may be corrupt or tampered with.\n"
++                            + "Expected: " + expectedSha256 + "\n"
++                            + "Got:      " + actualSha256);
++                }
++                LOGGER.info("SHA-256 verified OK: {}", actualSha256);
++            } else {
++                LOGGER.warn("Release notes contain no redist-sha256; skipping cryptographic hash check.");
++            }
++
++            // Structural check — must be a valid JAR with the expected main class
++            try (JarFile jar = new JarFile(tempFile)) {
++                String mainClass = jar.getManifest().getMainAttributes().getValue("Main-Class");
++                if (!OLauncherConstants.EXPECTED_MAIN_CLASS.equals(mainClass)) {
++                    throw new IOException(
++                            "Downloaded JAR has unexpected Main-Class: " + mainClass
++                            + " (expected " + OLauncherConstants.EXPECTED_MAIN_CLASS + ")");
++                }
++            }
++
++            // Move to final destination (replace any previous download)
++            File finalJar = new File(autoolDir, asset.getName());
++            Files.move(tempFile.toPath(), finalJar.toPath(), StandardCopyOption.REPLACE_EXISTING);
++            LOGGER.info("Update staged at {}", finalJar.getAbsolutePath());
++
++            // Remove jars from update procedure
++            File[] stale = autoolDir.listFiles((dir, name) -> name.matches("olauncher-[^-]+-redist\\.jar") && !name.equals(asset.getName()));
++            if (stale != null) {
++                for (File old : stale) {
++                    if (old.delete()) {
++                        LOGGER.info("Deleted old update JAR: {}", old.getName());
++                    } else {
++                        LOGGER.warn("Could not delete old update JAR: {}", old.getAbsolutePath());
++                    }
++                }
++            }
++
++            return finalJar;
++
++        } catch (Exception ex) {
++            tempFile.delete();
++            throw ex;
++        }
++    }
++
++    private void onDownloadComplete(File newJar, JFrame owner) {
++        try {
++            checker.clearCacheForUpdate();
++        } catch (IOException ex) {
++            LOGGER.warn("Could not clear update cache before restart", ex);
++        }
++
++        int choice = JOptionPane.showConfirmDialog(owner,
++                "Update downloaded and verified.\nThe launcher will now restart to apply " + release.getTagName() + ".",
++                "Restart to Update",
++                JOptionPane.OK_CANCEL_OPTION,
++                JOptionPane.INFORMATION_MESSAGE);
++        if (choice != JOptionPane.OK_OPTION) return;
++
++        try {
++            restart(newJar);
++        } catch (IOException ex) {
++            LOGGER.error("Failed to launch new version", ex);
++            JOptionPane.showMessageDialog(owner,
++                    "Restart failed:\n" + ex.getMessage(),
++                    "Restart Error", JOptionPane.ERROR_MESSAGE);
++        }
++    }
++
++    private void restart(File newJar) throws IOException {
++        String javaHome = System.getProperty("java.home");
++        String javaExe = javaHome + File.separator + "bin" + File.separator
++                + (OperatingSystem.getCurrentPlatform() == OperatingSystem.WINDOWS ? "javaw.exe" : "java");
++
++        if (!new File(javaExe).isFile()) {
++            // Fallback: try plain "java" on PATH
++            javaExe = "java";
++        }
++
++        List<String> cmd = new ArrayList<>();
++        cmd.add(javaExe);
++
++        System.getProperties().stringPropertyNames().stream()
++                .filter(key -> !key.equals("dev.figboot.olauncher.forceUpdate"))
++                .filter(key -> JVM_INTERNAL_PREFIXES.stream().noneMatch(key::startsWith))
++                .sorted()
++                .forEach(key -> cmd.add("-D" + key + "=" + System.getProperty(key)));
++
++        cmd.add("-jar");
++        cmd.add(newJar.getAbsolutePath());
++        Arrays.stream(Main.getLaunchArgs())
++                .filter(arg -> !arg.equalsIgnoreCase("--forceUpdate"))
++                .forEach(cmd::add);
++
++        LOGGER.info("Restarting: {}", String.join(" ", cmd));
++        new ProcessBuilder(cmd).inheritIO().start();
++        System.exit(0);
++    }
++
++    private static HttpURLConnection openConnection(URL url, Proxy proxy) throws IOException {
++        int hops = 0;
++        while (hops++ < 5) {
++            HttpURLConnection conn = (HttpURLConnection) (proxy != null && !proxy.equals(Proxy.NO_PROXY)
++                    ? url.openConnection(proxy) : url.openConnection());
++            conn.setRequestProperty("User-Agent",
++                    "OLauncher/" + LauncherVersion.getVersion() + " (auto-updater)");
++            conn.setConnectTimeout(10_000);
++            conn.setReadTimeout(60_000);
++            conn.setInstanceFollowRedirects(false);
++
++            int status = conn.getResponseCode();
++            if (status == HttpURLConnection.HTTP_MOVED_PERM
++                    || status == HttpURLConnection.HTTP_MOVED_TEMP
++                    || status == 307 || status == 308) {
++                String loc = conn.getHeaderField("Location");
++                conn.disconnect();
++                if (loc == null) throw new IOException("Redirect with no Location header");
++                url = new URL(loc);
++                continue;
++            }
++            if (status / 100 != 2) {
++                throw new IOException("Server returned HTTP " + status + " " + conn.getResponseMessage()
++                        + " for " + url);
++            }
++            return conn;
++        }
++        throw new IOException("Too many redirects");
++    }
++
++    private static MessageDigest newSha256() {
++        try {
++            return MessageDigest.getInstance("SHA-256");
++        } catch (NoSuchAlgorithmException ex) {
++            throw new RuntimeException("SHA-256 not available", ex);
++        }
++    }
++
++    private static String bytesToHex(byte[] bytes) {
++        StringBuilder sb = new StringBuilder(bytes.length * 2);
++        for (byte b : bytes) sb.append(String.format("%02x", b));
++        return sb.toString();
++    }
++}
+diff --git a/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateChecker.java b/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateChecker.java
+index 7541190..a9d52eb 100644
+--- a/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateChecker.java
++++ b/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateChecker.java
+@@ -2,9 +2,14 @@ package dev.figboot.olauncher.launcher.update;
+ 
+ import com.google.gson.Gson;
+ import com.google.gson.GsonBuilder;
++import dev.figboot.olauncher.OLauncherConstants;
+ import dev.figboot.olauncher.launcher.LauncherVersion;
+ import dev.figboot.olauncher.util.InstantTypeAdapter;
+ import net.minecraft.launcher.Launcher;
++import net.minecraft.launcher.Main;
++import net.minecraft.launcher.SwingUserInterface;
++
++import javax.swing.JFrame;
+ import org.apache.logging.log4j.LogManager;
+ import org.apache.logging.log4j.Logger;
+ 
+@@ -14,25 +19,16 @@ import java.io.InputStreamReader;
+ import java.io.Reader;
+ import java.io.Writer;
+ import java.net.HttpURLConnection;
+-import java.net.MalformedURLException;
+ import java.net.URL;
+ import java.nio.file.Files;
+ import java.nio.file.Path;
+ import java.time.Instant;
+ import java.time.temporal.ChronoUnit;
+-import java.time.temporal.TemporalUnit;
+-import java.util.LinkedList;
+-import java.util.List;
++import java.util.Arrays;
++import java.util.Comparator;
+ 
+ public class LauncherUpdateChecker {
+     private static final Logger LOGGER = LogManager.getLogger();
+-    private static final String INFO_FILE_NAME = "olauncher_update.json";
+-
+-    private static final URL GITHUB_LATEST_RELEASE_URL = constantURL("https://api.github.com/repos/RagedMeteor1837/olauncher/releases/latest");
+-
+-    private static final long UPDATE_CHECK_FREQ = 3;
+-    private static final TemporalUnit UPDATE_CHECK_FREQ_UNIT = ChronoUnit.HOURS;
+-
+     private final Gson gson;
+     private LauncherUpdateInfo info;
+ 
+@@ -44,9 +40,16 @@ public class LauncherUpdateChecker {
+ 
+     public void loadInfo() throws IOException {
+         Path workDir = Launcher.getCurrentInstance().getLauncher().getWorkingDirectory().toPath();
+-        Path infoFile = workDir.resolve(INFO_FILE_NAME);
++        Path infoFile = workDir.resolve(OLauncherConstants.INFO_FILE_NAME);
++
++        boolean currentlyDev = LauncherVersion.getInstance().isDevVersion()
++                             || LauncherVersion.getInstance().isDirty();
++        UpdateChannel buildChannel = currentlyDev ? UpdateChannel.DEV : UpdateChannel.STABLE;
++
+         if (!Files.isRegularFile(infoFile)) {
+             info = LauncherUpdateInfo.defaults();
++            info.setChannel(buildChannel);
++            info.setDevBuild(currentlyDev);
+             saveInfo();
+             return;
+         }
+@@ -54,24 +57,76 @@ public class LauncherUpdateChecker {
+         try (Reader r = Files.newBufferedReader(infoFile)) {
+             info = gson.fromJson(r, LauncherUpdateInfo.class);
+         }
++
++        // Auto-switch when the build type changes (e.g. stable build installed over dev, or vice versa).
++        // User manual channel changes do not update devBuild, so their preference persists as long as the same build type is running.
++        if (info.getChannel() == null || currentlyDev != info.isDevBuild()) {
++            LOGGER.info("Build type {}, switching update channel to {}.",
++                    new Object[]{info.getChannel() == null ? "unknown (migration)" : "changed", buildChannel});
++            info.setChannel(buildChannel);
++            info.setDevBuild(currentlyDev);
++            info.setLastCheck(Instant.MIN);
++            info.setLatestRelease(null);
++            saveInfo();
++            return;
++        }
++
++        // If we're running a version newer than what the cache considers "latest" e.g. after a manual update, invalidate the cache so we re-query immediately
++        if (!currentlyDev && info.getLatestRelease() != null) {
++            String curTag = LauncherVersion.getInstance().getTag();
++            String cachedTag = info.getLatestRelease().getTagName();
++            if (curTag != null && cachedTag != null && curTag.compareTo(cachedTag) > 0) {
++                LOGGER.info("Running version {} is newer than cached latest {}; forcing fresh update check.",
++                        new Object[]{curTag, cachedTag});
++                info.setLastCheck(Instant.MIN);
++                info.setLatestRelease(null);
++                saveInfo();
++            }
++        }
+     }
+ 
+     public void saveInfo() throws IOException {
+         Path workDir = Launcher.getCurrentInstance().getLauncher().getWorkingDirectory().toPath();
+-        Path infoFile = workDir.resolve(INFO_FILE_NAME);
++        Path infoFile = workDir.resolve(OLauncherConstants.INFO_FILE_NAME);
+         try (Writer w = Files.newBufferedWriter(infoFile)) {
+             w.write(gson.toJson(info, LauncherUpdateInfo.class));
+         }
+     }
+ 
++    public UpdateChannel getChannel() {
++        return info != null ? info.getChannel() : UpdateChannel.STABLE;
++    }
++
++    public void setChannel(UpdateChannel channel) throws IOException {
++        if (info == null) throw new IllegalStateException("Call loadInfo first!");
++        LOGGER.info("User switching update channel from {} to {}.", new Object[]{info.getChannel(), channel});
++        info.setChannel(channel);
++        info.setLastCheck(Instant.MIN);
++        info.setLatestRelease(null);
++        info.getIgnoreVersions().clear();
++        saveInfo();
++        updateCheck();
++    }
++
+     public void ignoreUpdate(long upd) {
+         info.getIgnoreVersions().add(upd);
+     }
+ 
++    public boolean isCheckingDisabled() {
++        return info != null && info.isDisabled();
++    }
++
+     public void setDisabled(boolean b) {
+         info.setDisabled(b);
+     }
+ 
++    public void clearCacheForUpdate() throws IOException {
++        info.setLastCheck(Instant.MIN);
++        info.setLatestRelease(null);
++        info.getIgnoreVersions().clear();
++        saveInfo();
++    }
++
+     public void updateCheck() throws IOException {
+         if (info == null) throw new IllegalStateException("Call loadInfo first!");
+ 
+@@ -80,19 +135,11 @@ public class LauncherUpdateChecker {
+             return;
+         }
+ 
+-        if (!System.getProperty("dev.figboot.olauncher.LauncherUpdateChecker.updateTest", "false").equalsIgnoreCase("true")
+-            && (LauncherVersion.getInstance().isDevVersion()
+-            || LauncherVersion.getInstance().isDirty())) {
+-            LOGGER.info("Not checking for updates because this is a development version or the working tree is dirty.");
+-            return;
+-        }
+-
+-        Instant checkTime = info.getLastCheck().plus(UPDATE_CHECK_FREQ, UPDATE_CHECK_FREQ_UNIT);
++        Instant checkTime = info.getLastCheck().plus(OLauncherConstants.UPDATE_CHECK_FREQ, OLauncherConstants.UPDATE_CHECK_FREQ_UNIT);
+         Instant now = Instant.now();
+-        if (checkTime.isAfter(now) && info.getLatestRelease() != null) {
++        if (!Main.isForceUpdate() && checkTime.isAfter(now) && info.getLatestRelease() != null) {
+             LOGGER.info("It is not time to query releases yet. Wait another {} minutes.",
+                     new Object[]{ChronoUnit.MINUTES.between(now, checkTime)});
+-
+             onReleaseResponse();
+             return;
+         }
+@@ -105,54 +152,112 @@ public class LauncherUpdateChecker {
+             }
+         });
+ 
+-        LOGGER.info("Querying latest release...");
++        LOGGER.info("Querying latest release on {} channel...", new Object[]{info.getChannel()});
+         checker.setDaemon(true);
+         checker.start();
+     }
+ 
+     private void queryReleases() throws IOException {
+-        HttpURLConnection conn = (HttpURLConnection)GITHUB_LATEST_RELEASE_URL.openConnection();
+-        conn.setRequestProperty("Accept", "application/vnd.github.v3+json");
+-        conn.setRequestProperty("User-Agent", LauncherVersion.getLauncherName() + "/" + LauncherVersion.getVersion());
+-        conn.setConnectTimeout(5000);
+-        conn.setReadTimeout(30000);
++        ReleaseInfo release = info.getChannel() == UpdateChannel.DEV
++                ? queryLatestPrerelease()
++                : queryLatestStableRelease();
+ 
+-        ReleaseInfo release;
++        if (release == null) {
++            LOGGER.warn("No suitable release found on the {} channel.", new Object[]{info.getChannel()});
++            return;
++        }
+ 
++        info.setLastCheck(Instant.now());
++        info.setLatestRelease(release);
++        saveInfo();
++        onReleaseResponse();
++    }
++
++    private ReleaseInfo queryLatestStableRelease() throws IOException {
++        HttpURLConnection conn = openConnection(OLauncherConstants.GITHUB_LATEST_RELEASE_URL);
+         if (conn.getResponseCode() / 100 != 2) {
+-            LOGGER.error("Error response code returned by server: " + conn.getResponseCode() + " " + conn.getResponseMessage());
+-            return;
++            LOGGER.error("Error response from server: {} {}", new Object[]{conn.getResponseCode(), conn.getResponseMessage()});
++            return null;
+         }
++        try (Reader r = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
++            return gson.fromJson(r, ReleaseInfo.class);
++        }
++    }
+ 
++    private ReleaseInfo queryLatestPrerelease() throws IOException {
++        HttpURLConnection conn = openConnection(OLauncherConstants.GITHUB_RELEASES_URL);
++        if (conn.getResponseCode() / 100 != 2) {
++            LOGGER.error("Error response from server: {} {}", new Object[]{conn.getResponseCode(), conn.getResponseMessage()});
++            return null;
++        }
+         try (Reader r = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
+-            release = gson.fromJson(r, ReleaseInfo.class);
++            ReleaseInfo[] releases = gson.fromJson(r, ReleaseInfo[].class);
+ 
+-            info.setLastCheck(Instant.now());
+-            info.setLatestRelease(release);
+-            saveInfo();
++            ReleaseInfo latestPrerelease = Arrays.stream(releases)
++                    .filter(ReleaseInfo::isPrerelease)
++                    .max(Comparator.comparing(ReleaseInfo::getCreatedAt))
++                    .orElse(null);
++
++            // A stable release flagged with "dev-channel: true" is also offered on the dev channel, but only if no newer dev release exists
++            ReleaseInfo latestFlaggedStable = Arrays.stream(releases)
++                    .filter(rel -> !rel.isPrerelease() && rel.isDevChannelFlagged())
++                    .max(Comparator.comparing(ReleaseInfo::getCreatedAt))
++                    .orElse(null);
++
++            if (latestPrerelease == null) return latestFlaggedStable;
++            if (latestFlaggedStable == null) return latestPrerelease;
++            return latestFlaggedStable.getCreatedAt().isAfter(latestPrerelease.getCreatedAt())
++                    ? latestFlaggedStable : latestPrerelease;
+         }
+-        onReleaseResponse();
++    }
++
++    private HttpURLConnection openConnection(URL url) throws IOException {
++        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
++        conn.setRequestProperty("Accept", "application/vnd.github.v3+json");
++        conn.setRequestProperty("User-Agent", LauncherVersion.getLauncherName() + "/" + LauncherVersion.getVersion());
++        conn.setConnectTimeout(5000);
++        conn.setReadTimeout(30000);
++        return conn;
+     }
+ 
+     private void onReleaseResponse() {
+         ReleaseInfo release = info.getLatestRelease();
+-        LOGGER.info("Latest release is {} (ID {}).", new Object[]{release.getName(), release.getID()});
++        LOGGER.info("Latest {} channel release is {} (ID {}).",
++                new Object[]{info.getChannel(), release.getName(), release.getID()});
+ 
+         if (info.getIgnoreVersions().contains(release.getID())) {
+             return;
+         }
+ 
+-        String curTag = LauncherVersion.getInstance().getTag();
+-        if (release.getTagName().compareTo(curTag) > 0) {
+-            new UpdateAvailableDialog(this, release);
++        if (!shouldShowUpdateDialog(release)) return;
++
++        if (LauncherVersion.getInstance().isDirty() && !Main.isForceUpdate()) {
++            LOGGER.info("Update available ({}) but notification suppressed for dirty build.",
++                    new Object[]{release.getTagName()});
++            return;
+         }
++
++        JFrame frame = ((SwingUserInterface) Launcher.getCurrentInstance().getUserInterface()).getFrame();
++        new UpdateAvailableDialog(this, release, frame);
+     }
+ 
+-    private static URL constantURL(String url) {
+-        try {
+-            return new URL(url);
+-        } catch (MalformedURLException ex) {
+-            throw new RuntimeException(ex);
++    private boolean shouldShowUpdateDialog(ReleaseInfo release) {
++        if (Main.isForceUpdate()) return true;
++        if (info.getChannel() == UpdateChannel.DEV) {
++            String fullCommitId = LauncherVersion.getInstance().getFullCommitId();
++            String buildSha = release.getBuildSha();
++            if (fullCommitId != null && buildSha != null) {
++                return !buildSha.equalsIgnoreCase(fullCommitId);
++            }
++            String commitId = LauncherVersion.getInstance().getCommitId();
++            return commitId == null || !release.getTagName().contains(commitId);
++        } else {
++            if (LauncherVersion.getInstance().isDevVersion() || LauncherVersion.getInstance().isDirty()) {
++                return true;
++            }
++            String curTag = LauncherVersion.getInstance().getTag();
++            return release.getTagName().compareTo(curTag) > 0;
+         }
+     }
++
+ }
+diff --git a/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateInfo.java b/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateInfo.java
+index 836316b..16c7824 100644
+--- a/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateInfo.java
++++ b/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateInfo.java
+@@ -13,6 +13,8 @@ public class LauncherUpdateInfo {
+     @Getter private List<Long> ignoreVersions;
+     @Getter @Setter private boolean disabled;
+     @Getter @Setter private ReleaseInfo latestRelease;
++    @Getter @Setter private UpdateChannel channel;
++    @Getter @Setter private boolean devBuild;
+ 
+     public static LauncherUpdateInfo defaults() {
+         LauncherUpdateInfo info = new LauncherUpdateInfo();
+@@ -20,6 +22,8 @@ public class LauncherUpdateInfo {
+         info.ignoreVersions = new LinkedList<>();
+         info.disabled = false;
+         info.latestRelease = null;
++        info.channel = UpdateChannel.STABLE;
++        info.devBuild = false;
+         return info;
+     }
+ }
+diff --git a/src/main/java/dev/figboot/olauncher/launcher/update/ReleaseInfo.java b/src/main/java/dev/figboot/olauncher/launcher/update/ReleaseInfo.java
+index 74026c7..8eb0150 100644
+--- a/src/main/java/dev/figboot/olauncher/launcher/update/ReleaseInfo.java
++++ b/src/main/java/dev/figboot/olauncher/launcher/update/ReleaseInfo.java
+@@ -13,8 +13,13 @@ public class ReleaseInfo {
+     private String tag_name;
+     private String body;
+ 
++    private boolean prerelease;
+     private List<Asset> assets;
+ 
++    public boolean isPrerelease() {
++        return prerelease;
++    }
++
+     public Instant getCreatedAt() {
+         return created_at;
+     }
+@@ -39,6 +44,36 @@ public class ReleaseInfo {
+         return body;
+     }
+ 
++    public boolean isDevChannelFlagged() {
++        if (body == null) return false;
++        for (String line : body.split("\r?\n")) {
++            if (line.trim().equalsIgnoreCase("dev-channel: true")) return true;
++        }
++        return false;
++    }
++
++    public String getBuildSha() {
++        if (body == null) return null;
++        for (String line : body.split("\r?\n")) {
++            if (line.startsWith("build-sha:")) {
++                String sha = line.substring("build-sha:".length()).trim();
++                if (sha.matches("[0-9a-fA-F]{40}")) return sha;
++            }
++        }
++        return null;
++    }
++
++    public String getRedistSha256() {
++        if (body == null) return null;
++        for (String line : body.split("\r?\n")) {
++            if (line.startsWith("redist-sha256:")) {
++                String sha = line.substring("redist-sha256:".length()).trim();
++                if (sha.matches("[0-9a-fA-F]{64}")) return sha;
++            }
++        }
++        return null;
++    }
++
+     public List<Asset> getAssets() {
+         return Collections.unmodifiableList(assets);
+     }
+diff --git a/src/main/java/dev/figboot/olauncher/launcher/update/UpdateAvailableDialog.java b/src/main/java/dev/figboot/olauncher/launcher/update/UpdateAvailableDialog.java
+index 54d2325..3c7d1ae 100644
+--- a/src/main/java/dev/figboot/olauncher/launcher/update/UpdateAvailableDialog.java
++++ b/src/main/java/dev/figboot/olauncher/launcher/update/UpdateAvailableDialog.java
+@@ -8,8 +8,8 @@ import org.apache.logging.log4j.Logger;
+ import javax.swing.*;
+ import javax.swing.border.EmptyBorder;
+ import java.awt.*;
+-import java.awt.event.ActionEvent;
+-import java.io.IOException;
++import java.awt.event.MouseAdapter;
++import java.awt.event.MouseEvent;
+ import java.net.URISyntaxException;
+ import java.time.Instant;
+ 
+@@ -18,165 +18,109 @@ public class UpdateAvailableDialog extends JDialog {
+ 
+     private final LauncherUpdateChecker checker;
+     private final ReleaseInfo release;
+-    private JScrollPane infoScrollPane;
+ 
+-    private JComboBox<String> cbxOptionChoose;
+-    private JButton btnConfirm;
++    private final Font headerFont = new Font(Font.SANS_SERIF, Font.BOLD, 20);
++    private final Font infoFont   = new Font(Font.SANS_SERIF, Font.BOLD, 12);
++    private final Font valueFont  = new Font(Font.SANS_SERIF, Font.PLAIN, 12);
+ 
+-    private final Font headerFont = new Font(Font.SANS_SERIF, Font.BOLD, 24);
+-    private final Font infoFont = new Font(Font.SANS_SERIF, Font.BOLD, 12);
+-    private final Font valueFont = new Font(Font.SANS_SERIF, Font.PLAIN, 12);
+-
+-    public UpdateAvailableDialog(LauncherUpdateChecker checker, ReleaseInfo release) {
++    public UpdateAvailableDialog(LauncherUpdateChecker checker, ReleaseInfo release, JFrame owner) {
++        super(owner, "Launcher Update", true);
+         this.checker = checker;
+         this.release = release;
+-
+         SwingUtilities.invokeLater(this::initUI);
+     }
+ 
+-    private int gridy = 1;
++    private int gridy = 0;
+     private void addUpdateInfo(JPanel panel, String key, String val) {
+         JLabel lbl = new JLabel(key);
+         lbl.setFont(infoFont);
+-        panel.add(lbl, new GridBagConstraints(0, gridy, 1, 1, 0.3, 0, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(0,0,0,0), 0, 0));
++        panel.add(lbl, new GridBagConstraints(0, gridy, 1, 1, 0.3, 0,
++                GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL,
++                new Insets(2, 0, 2, 8), 0, 0));
+ 
+         lbl = new JLabel(val);
+         lbl.setFont(valueFont);
+-        panel.add(lbl, new GridBagConstraints(1, gridy++, 1, 1, 0.7, 0, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(0,0,0,0), 0, 0));
++        panel.add(lbl, new GridBagConstraints(1, gridy++, 1, 1, 0.7, 0,
++                GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL,
++                new Insets(2, 0, 2, 0), 0, 0));
+     }
+ 
+     private void initUI() {
+-        setModal(true);
+         setResizable(false);
+-        setModalityType(ModalityType.APPLICATION_MODAL);
+         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+-        setTitle("Launcher Update Checker");
+-
+-        setLayout(new BorderLayout());
++        setLayout(new BorderLayout(0, 8));
+ 
+-        JLabel headerLabel = new JLabel("Launcher update available");
+-        headerLabel.setBorder(new EmptyBorder(5, 5, 5, 5));
+-        headerLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
++        // Header
++        String channelSuffix = checker.getChannel() == UpdateChannel.DEV ? " (Dev Channel)" : "";
++        JLabel headerLabel = new JLabel("Launcher update available" + channelSuffix);
++        headerLabel.setBorder(new EmptyBorder(10, 10, 0, 10));
+         headerLabel.setFont(headerFont);
+         add(headerLabel, BorderLayout.PAGE_START);
+ 
++        // Info
+         JPanel infoPanel = new JPanel(new GridBagLayout());
+-        infoPanel.setBorder(new EmptyBorder(5, 5, 5, 5));
+-        infoPanel.setAlignmentY(Component.TOP_ALIGNMENT);
+-
+-        infoScrollPane = new JScrollPane();
+-
+-        JTextPane area = new JTextPane();
+-        area.setEditable(false);
+-        area.setBackground(getBackground());
+-        area.setContentType("text/plain");
+-        area.setText(release.getBody());
+-        infoScrollPane.setViewportView(area);
++        infoPanel.setBorder(new EmptyBorder(0, 10, 0, 10));
+ 
+-        addUpdateInfo(infoPanel, "Update Version", LauncherVersion.getInstance().getTag() + " -> " + release.getTagName());
++        addUpdateInfo(infoPanel, "Update Version",
++                release.getTagName());
+         addUpdateInfo(infoPanel, "Released", getTimeSince(release.getCreatedAt()));
+ 
+         ReleaseInfo.Asset asset = release.getRedistAsset();
+         if (asset != null) {
+-            addUpdateInfo(infoPanel, "File name", asset.getName());
+-            addUpdateInfo(infoPanel, "Size", String.format("%.01f MB", asset.getSize() / 1000000.));
++            addUpdateInfo(infoPanel, "File",      asset.getName());
++            addUpdateInfo(infoPanel, "Size",      String.format("%.1f MB", asset.getSize() / 1_000_000.0));
+             addUpdateInfo(infoPanel, "Downloads", Long.toString(asset.getDownloadCount()));
+-        } else {
+-            addUpdateInfo(infoPanel, "File name", "N/A");
+         }
+-
+-        infoPanel.add(infoScrollPane, new GridBagConstraints(0, gridy, 2, 1, 0, 0, GridBagConstraints.PAGE_START, GridBagConstraints.HORIZONTAL, new Insets(10, 0, 5, 0), 0, 0));
+-
+         add(infoPanel, BorderLayout.CENTER);
+ 
+-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+-        buttonPanel.setBorder(new EmptyBorder(0, 0, 5, 0));
+-        cbxOptionChoose = new JComboBox<>(new String[]{"Download this version", "Go to release page", "Remind me later", "Ignore this update", "Stop checking for updates"});
+-        cbxOptionChoose.setSelectedIndex(asset == null ? 1 : 0);
+-        cbxOptionChoose.addActionListener(this::comboBoxOptionChoose);
+-        buttonPanel.add(cbxOptionChoose);
++        // Buttons
++        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
++        buttonPanel.setBorder(new EmptyBorder(0, 6, 8, 6));
++
++        if (asset != null) {
++            JButton downloadBtn = new JButton("Download and Install");
++            buttonPanel.add(downloadBtn);
++            downloadBtn.addActionListener(e -> {
++                dispose();
++                new LauncherSelfUpdater(checker, release, asset).startUpdate((JFrame) getOwner());
++            });
++        }
+ 
+-        btnConfirm = new JButton("Confirm");
+-        btnConfirm.addActionListener(this::confirmClicked);
+-        buttonPanel.add(btnConfirm);
++        JButton remindBtn    = new JButton("Remind Me Later");
++        JButton releasePgBtn = new JButton("Release Page");
++        buttonPanel.add(remindBtn);
++        buttonPanel.add(releasePgBtn);
+ 
+         add(buttonPanel, BorderLayout.PAGE_END);
+ 
++        remindBtn.addActionListener(e -> dispose());
++        releasePgBtn.addActionListener(e -> openReleasePage());
++
+         pack();
+-        setLocationByPlatform(true);
+-        setLocationRelativeTo(null);
++        setLocationRelativeTo(getOwner());
+         setVisible(true);
+     }
+ 
+-    private void comboBoxOptionChoose(ActionEvent evt) {
+-        btnConfirm.setEnabled(cbxOptionChoose.getSelectedIndex() != 0 || release.getRedistAsset() != null);
+-    }
+-
+-    private void confirmClicked(ActionEvent evt) {
+-        ReleaseInfo.Asset releaseAsset = release.getRedistAsset();
+-        switch (cbxOptionChoose.getSelectedIndex()) {
+-            case 0:
+-                if (releaseAsset == null) return;
+-                try {
+-                    OperatingSystem.openLink(releaseAsset.getDownloadURL().toURI());
+-                } catch (URISyntaxException ex) {
+-                    LOGGER.error("Error opening link", ex);
+-                }
+-                break;
+-            case 1:
+-                try {
+-                    OperatingSystem.openLink(release.getPage().toURI());
+-                } catch (URISyntaxException ex) {
+-                    LOGGER.error("Error opening link", ex);
+-                }
+-                break;
+-            case 2:
+-                break;
+-            case 3:
+-                checker.ignoreUpdate(release.getID());
+-                try {
+-                    checker.saveInfo();
+-                } catch (IOException ex) {
+-                    LOGGER.error("Unable to save update preferences", ex);
+-                }
+-                break;
+-            case 4:
+-                checker.setDisabled(true);
+-                try {
+-                    checker.saveInfo();
+-                } catch (IOException ex) {
+-                    LOGGER.error("Unable to save update preferences", ex);
+-                }
+-                break;
+-            default:
+-                return;
++    private void openReleasePage() {
++        try {
++            OperatingSystem.openLink(release.getPage().toURI());
++        } catch (URISyntaxException ex) {
++            LOGGER.error("Error opening release page", ex);
+         }
+-
+-        dispose();
+     }
+ 
+     private static String getTimeSince(Instant time) {
+         long seconds = Instant.now().getEpochSecond() - time.getEpochSecond();
+-        long weeks = seconds / (7*24*60*60);
+-        long leftOver = seconds % (7*24*60*60);
+-
+-        long days = seconds / (24*60*60);
+-        leftOver %= (24*60*60);
+-
+-        long hours = leftOver / 3600;
+-        leftOver %= 3600;
+-
++        long weeks   = seconds / (7 * 24 * 60 * 60);
++        long days    = seconds / (24 * 60 * 60);
++        long leftOver = seconds % (24 * 60 * 60);
++        long hours   = leftOver / 3600;
++        leftOver    %= 3600;
+         long minutes = leftOver / 60;
+ 
+-        if (weeks == 0) {
+-            if (days == 0) {
+-                if (hours == 0) {
+-                    return String.format("%d minute%s ago", minutes, minutes == 1 ? "" : "s");
+-                }
+-                return String.format("%d hour%s, %d minute%s ago", hours, hours == 1 ? "" : "s", minutes, minutes == 1 ? "" : "s");
+-            }
+-            return String.format("%d day%s, %d hour%s ago", days, days == 1 ? "" : "s", hours, hours == 1 ? "" : "s");
+-        }
+-        return String.format("%d week%s, %d day%s ago", weeks, weeks == 1 ? "" : "s", days, days == 1 ? "" : "s");
++        if (weeks > 0)  return String.format("%d week%s, %d day%s ago",   weeks,   weeks   == 1 ? "" : "s", days,    days    == 1 ? "" : "s");
++        if (days > 0)   return String.format("%d day%s, %d hour%s ago",   days,    days    == 1 ? "" : "s", hours,   hours   == 1 ? "" : "s");
++        if (hours > 0)  return String.format("%d hour%s, %d minute%s ago",hours,   hours   == 1 ? "" : "s", minutes, minutes == 1 ? "" : "s");
++        return String.format("%d minute%s ago", minutes, minutes == 1 ? "" : "s");
+     }
+ }
+diff --git a/src/main/java/dev/figboot/olauncher/launcher/update/UpdateChannel.java b/src/main/java/dev/figboot/olauncher/launcher/update/UpdateChannel.java
+new file mode 100644
+index 0000000..2849293
+--- /dev/null
++++ b/src/main/java/dev/figboot/olauncher/launcher/update/UpdateChannel.java
+@@ -0,0 +1,6 @@
++package dev.figboot.olauncher.launcher.update;
++
++public enum UpdateChannel {
++    STABLE,
++    DEV
++}
+diff --git a/src/main/java/dev/figboot/olauncher/launcher/update/UpdateChannelDialog.java b/src/main/java/dev/figboot/olauncher/launcher/update/UpdateChannelDialog.java
+new file mode 100644
+index 0000000..9017a36
+--- /dev/null
++++ b/src/main/java/dev/figboot/olauncher/launcher/update/UpdateChannelDialog.java
+@@ -0,0 +1,130 @@
++package dev.figboot.olauncher.launcher.update;
++
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
++
++import javax.swing.*;
++import javax.swing.border.CompoundBorder;
++import javax.swing.border.EmptyBorder;
++import javax.swing.border.TitledBorder;
++import java.awt.*;
++import java.awt.event.ActionEvent;
++import java.io.IOException;
++
++public class UpdateChannelDialog extends JDialog {
++    private static final Logger LOGGER = LogManager.getLogger();
++
++    private final LauncherUpdateChecker checker;
++    private JCheckBox cbEnabled;
++    private JRadioButton rbStable;
++    private JRadioButton rbDev;
++
++    public UpdateChannelDialog(LauncherUpdateChecker checker, JFrame owner) {
++        super(owner, "Update Preferences", true);
++        this.checker = checker;
++        SwingUtilities.invokeLater(this::initUI);
++    }
++
++    private void initUI() {
++        setResizable(false);
++        setDefaultCloseOperation(DISPOSE_ON_CLOSE);
++
++        JPanel root = new JPanel(new BorderLayout(0, 8));
++        root.setBorder(new EmptyBorder(10, 10, 8, 10));
++
++        // Sections
++        JPanel sections = new JPanel();
++        sections.setLayout(new BoxLayout(sections, BoxLayout.Y_AXIS));
++
++        // General section
++        JPanel generalPanel = new JPanel();
++        generalPanel.setLayout(new BoxLayout(generalPanel, BoxLayout.Y_AXIS));
++        generalPanel.setBorder(sectionBorder("General"));
++
++        cbEnabled = new JCheckBox("Check for updates automatically");
++        cbEnabled.setSelected(!checker.isCheckingDisabled());
++        cbEnabled.setAlignmentX(Component.LEFT_ALIGNMENT);
++        generalPanel.add(cbEnabled);
++
++        sections.add(generalPanel);
++        sections.add(Box.createVerticalStrut(8));
++
++        // Update Channel section
++        JPanel channelPanel = new JPanel();
++        channelPanel.setLayout(new BoxLayout(channelPanel, BoxLayout.Y_AXIS));
++        channelPanel.setBorder(sectionBorder("Update Channel"));
++
++        rbStable = new JRadioButton("<html><b>Stable</b> — Mainline releases from the master branch</html>");
++        rbDev    = new JRadioButton("<html><b>Dev</b> — Development builds from the dev branch</html>");
++        rbStable.setAlignmentX(Component.LEFT_ALIGNMENT);
++        rbDev.setAlignmentX(Component.LEFT_ALIGNMENT);
++
++        ButtonGroup group = new ButtonGroup();
++        group.add(rbStable);
++        group.add(rbDev);
++
++        if (checker.getChannel() == UpdateChannel.DEV) {
++            rbDev.setSelected(true);
++        } else {
++            rbStable.setSelected(true);
++        }
++
++        updateChannelEnabled();
++        cbEnabled.addActionListener(e -> updateChannelEnabled());
++
++        channelPanel.add(rbStable);
++        channelPanel.add(Box.createVerticalStrut(4));
++        channelPanel.add(rbDev);
++
++        sections.add(channelPanel);
++        root.add(sections, BorderLayout.CENTER);
++
++        // Buttons
++        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
++        JButton btnCancel = new JButton("Cancel");
++        JButton btnOk     = new JButton("OK");
++        btnCancel.addActionListener(e -> dispose());
++        btnOk.addActionListener(this::okClicked);
++        buttons.add(btnOk);
++        buttons.add(btnCancel);
++        root.add(buttons, BorderLayout.PAGE_END);
++
++        add(root);
++        pack();
++        setLocationRelativeTo(getOwner());
++        setVisible(true);
++    }
++
++    private void updateChannelEnabled() {
++        boolean enabled = cbEnabled.isSelected();
++        rbStable.setEnabled(enabled);
++        rbDev.setEnabled(enabled);
++    }
++
++    private void okClicked(ActionEvent e) {
++        boolean disableChecking = !cbEnabled.isSelected();
++        if (disableChecking != checker.isCheckingDisabled()) {
++            checker.setDisabled(disableChecking);
++        }
++
++        UpdateChannel selected = rbDev.isSelected() ? UpdateChannel.DEV : UpdateChannel.STABLE;
++        try {
++            if (!disableChecking && selected != checker.getChannel()) {
++                checker.setChannel(selected); // saves and triggers a re-check
++            } else {
++                checker.saveInfo();
++            }
++        } catch (IOException ex) {
++            LOGGER.error("Unable to save update preferences", ex);
++        }
++        dispose();
++    }
++
++    private static TitledBorder sectionBorder(String title) {
++        return new TitledBorder(
++                new CompoundBorder(
++                        BorderFactory.createEtchedBorder(),
++                        new EmptyBorder(4, 6, 6, 6)),
++                title);
++    }
++}
+diff --git a/src/main/java/net/minecraft/launcher/Launcher.java b/src/main/java/net/minecraft/launcher/Launcher.java
+index 07f8ed9..9ccae09 100644
+--- a/src/main/java/net/minecraft/launcher/Launcher.java
++++ b/src/main/java/net/minecraft/launcher/Launcher.java
+@@ -78,6 +78,7 @@ public class Launcher {
+     private final ProfileManager profileManager;
+     private final Gson gson;
+     private final GameLaunchDispatcher launchDispatcher;
++    @Getter private LauncherUpdateChecker updateChecker; // olauncher
+     private boolean winTenHack;
+     private UUID clientToken;
+     private String requestedUser;
+@@ -119,19 +120,28 @@ public class Launcher {
+             this.launchDispatcher = new GameLaunchDispatcher(this, this.processArgs(var5));
+             this.launcher = new com.mojang.launcher.Launcher(this.userInterface, var2, var3, var4, new MinecraftVersionManager(new LocalVersionList(var2), new RemoteVersionList(LauncherConstants.PROPERTIES.getVersionManifest(), var3, this)), Agent.MINECRAFT, MinecraftReleaseTypeFactory.instance(), 21);
+             this.profileManager = new ProfileManager(this);
++
++            // load update checker before the frame so AboutTab can reference it
++            this.updateChecker = new LauncherUpdateChecker();
++            try {
++                this.updateChecker.loadInfo();
++            } catch (IOException ex) {
++                LOGGER.error("Error loading update checker state. Update checking will not continue.", ex);
++                this.updateChecker = null;
++            }
++
+             ((SwingUserInterface)this.userInterface).initializeFrame();
+             refreshJavaRuntimes(); // olauncher - refresh java runtimes
+             this.refreshVersionsAndProfiles();
+ 
+-            // olauncher start - check for updates
+-            LauncherUpdateChecker checker = new LauncherUpdateChecker();
+-            try {
+-                checker.loadInfo();
+-                checker.updateCheck();
+-            } catch (IOException ex) {
+-                LOGGER.error("Error checking for launcher updates. Update checking will not continue.", ex);
++            // trigger update check after frame is ready
++            if (this.updateChecker != null) {
++                try {
++                    this.updateChecker.updateCheck();
++                } catch (IOException ex) {
++                    LOGGER.error("Error checking for launcher updates.", ex);
++                }
+             }
+-            // olauncher end
+         }
+     }
+ 
+diff --git a/src/main/java/net/minecraft/launcher/Main.java b/src/main/java/net/minecraft/launcher/Main.java
+index 63a7a5c..6c046c0 100644
+--- a/src/main/java/net/minecraft/launcher/Main.java
++++ b/src/main/java/net/minecraft/launcher/Main.java
+@@ -28,11 +28,18 @@ import org.apache.logging.log4j.Logger;
+ public class Main {
+     private static final Logger LOGGER = LogManager.getLogger();
+ 
++    private static String[] launchArgs = new String[0];
++    private static boolean forceUpdate = false;
++
++    public static String[] getLaunchArgs() { return launchArgs; }
++    public static boolean isForceUpdate() { return forceUpdate; }
++
+     public Main() {
+     }
+ 
+     public static void main(String[] var0) {
+         LOGGER.debug("main() called!");
++        launchArgs = var0 != null ? var0 : new String[0];
+         startLauncher(var0);
+     }
+ 
+@@ -41,6 +48,7 @@ public class Main {
+         OptionParser var1 = new OptionParser();
+         var1.allowsUnrecognizedOptions();
+         var1.accepts("winTen");
++        var1.accepts("forceUpdate");
+         ArgumentAcceptingOptionSpec var2 = var1.accepts("proxyHost").withRequiredArg();
+         ArgumentAcceptingOptionSpec var3 = var1.accepts("proxyPort").withRequiredArg().defaultsTo("8080", new String[0]).ofType(Integer.class);
+         ArgumentAcceptingOptionSpec var4 = var1.accepts("workDir").withRequiredArg().ofType(File.class).defaultsTo(getWorkingDirectory(), new File[0]);
+@@ -79,6 +87,10 @@ public class Main {
+             System.setProperty("os.version", "10.0");
+         }
+ 
++        forceUpdate = var6.has("forceUpdate")
++                || "true".equalsIgnoreCase(System.getProperty("dev.figboot.olauncher.forceUpdate"));
++        if (forceUpdate) LOGGER.info("--forceUpdate flag active: update checks and dialogs will be forced.");
++
+         LOGGER.debug("Starting up launcher.");
+         Launcher var16 = new Launcher(var12, var10, var9, (PasswordAuthentication)null, (String[])var7.toArray(new String[var7.size()]), 100);
+         if (var6.has("winTen")) {
+diff --git a/src/main/java/net/minecraft/launcher/ui/tabs/AboutTab.java b/src/main/java/net/minecraft/launcher/ui/tabs/AboutTab.java
+index 9f6dbad..b4dccc7 100644
+--- a/src/main/java/net/minecraft/launcher/ui/tabs/AboutTab.java
++++ b/src/main/java/net/minecraft/launcher/ui/tabs/AboutTab.java
+@@ -5,6 +5,7 @@ package net.minecraft.launcher.ui.tabs;
+ import javax.swing.BorderFactory;
+ import javax.swing.Box;
+ import javax.swing.BoxLayout;
++import javax.swing.JButton;
+ import javax.swing.JLayeredPane;
+ import javax.swing.JComponent;
+ import javax.swing.JLabel;
+@@ -16,15 +17,20 @@ import javax.swing.border.EmptyBorder;
+ import java.awt.BorderLayout;
+ import java.awt.Color;
+ import java.awt.Dimension;
+-import java.awt.Font;
+ import java.awt.event.ComponentAdapter;
+ import java.awt.event.ComponentEvent;
+ 
+ import com.mojang.launcher.OperatingSystem;
++import dev.figboot.olauncher.launcher.update.LauncherUpdateChecker;
++import dev.figboot.olauncher.launcher.update.UpdateChannelDialog;
+ import net.minecraft.launcher.Launcher;
+ import net.minecraft.launcher.LauncherConstants;
++import net.minecraft.launcher.SwingUserInterface;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
+ 
+ public class AboutTab extends JPanel {
++    private static final Logger LOGGER = LogManager.getLogger();
+     private final Launcher minecraftLauncher;
+ 
+     private final WebsiteTab websiteTab;
+@@ -52,10 +58,9 @@ public class AboutTab extends JPanel {
+         Color borderCol = UIManager.getColor("controlShadow");
+         if (borderCol == null) borderCol = new Color(200, 200, 200);
+ 
+-        Font labelFont = UIManager.getFont("Label.font");
++        java.awt.Font labelFont = UIManager.getFont("Label.font");
+         if (labelFont == null) labelFont = new JLabel().getFont();
+ 
+-
+         JPanel sidebarBox = new JPanel();
+         sidebarBox.setLayout(new BoxLayout(sidebarBox, BoxLayout.Y_AXIS));
+         sidebarBox.setOpaque(true);
+@@ -92,6 +97,18 @@ public class AboutTab extends JPanel {
+ 
+         sidebarBox.add(descText);
+ 
++        LauncherUpdateChecker checker = Launcher.getCurrentInstance().getUpdateChecker();
++        if (checker != null) {
++            sidebarBox.add(Box.createVerticalStrut(12));
++
++            JButton channelBtn = new JButton("Update Preferences");
++            channelBtn.setAlignmentX(JComponent.LEFT_ALIGNMENT);
++            channelBtn.setMaximumSize(new Dimension(Integer.MAX_VALUE, channelBtn.getPreferredSize().height));
++            channelBtn.addActionListener(e -> new UpdateChannelDialog(checker,
++                    ((SwingUserInterface) minecraftLauncher.getUserInterface()).getFrame()));
++            sidebarBox.add(channelBtn);
++        }
++
+         sidebarBox.add(Box.createVerticalGlue());
+ 
+         JPanel sidebar = new JPanel(new BorderLayout());
+-- 
+2.54.0.windows.1
+

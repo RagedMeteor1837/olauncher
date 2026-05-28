@@ -1,0 +1,533 @@
+From f9559d45974a459e7639d0a5840dd23f66e7482b Mon Sep 17 00:00:00 2001
+From: RagedMeteor1837 <148640131+RagedMeteor1837@users.noreply.github.com>
+Date: Sat, 9 May 2026 23:43:30 +0100
+Subject: [PATCH] Launcher optimisations
+
+
+diff --git a/src/main/java/dev/figboot/olauncher/auth/MicrosoftUserAuthentication.java b/src/main/java/dev/figboot/olauncher/auth/MicrosoftUserAuthentication.java
+index 1ec8288..3311c58 100644
+--- a/src/main/java/dev/figboot/olauncher/auth/MicrosoftUserAuthentication.java
++++ b/src/main/java/dev/figboot/olauncher/auth/MicrosoftUserAuthentication.java
+@@ -234,8 +234,7 @@ public class MicrosoftUserAuthentication extends HttpUserAuthentication {
+         }
+ 
+         String profileName = StringUtils.isNotBlank(cachedProfileName) ? cachedProfileName : "Player";
+-        String userId = xuid.toString().replace("-", "")
+-                .replaceFirst("^0+(?!$)", "");  // Remove leading zeros
++        String userId = Long.toHexString(xuid.getLeastSignificantBits());
+ 
+         profileInfo = new MCProfileInfo(xuid, profileName);
+         
+@@ -292,10 +291,10 @@ public class MicrosoftUserAuthentication extends HttpUserAuthentication {
+             online = true;  // Successfully logged in online
+         }
+ 
+-        String userId = profileInfo.getId().toString().replace("-", "");
+-        if (isDemo) {
+-            userId = userId.replaceFirst("^0+(?!$)", "");
+-        }
++        UUID profileId = profileInfo.getId();
++        String userId = isDemo
++                ? Long.toHexString(profileId.getLeastSignificantBits())
++                : profileId.toString().replace("-", "");
+ 
+         setUserid(userId);
+         setUserType(UserType.MICROSOFT);
+diff --git a/src/main/java/dev/figboot/olauncher/auth/ui/DeviceCodeDialog.java b/src/main/java/dev/figboot/olauncher/auth/ui/DeviceCodeDialog.java
+index c032be4..e678c3c 100644
+--- a/src/main/java/dev/figboot/olauncher/auth/ui/DeviceCodeDialog.java
++++ b/src/main/java/dev/figboot/olauncher/auth/ui/DeviceCodeDialog.java
+@@ -33,7 +33,7 @@ public class DeviceCodeDialog extends JDialog {
+ 
+     private final ScheduledThreadPoolExecutor schedExec;
+ 
+-    private boolean hasShutDown = false;
++    private volatile boolean hasShutDown = false;
+     private MSDeviceCodeResponse deviceCodeResponse;
+ 
+     private final Consumer<MSDeviceCodeHeartbeatResponse> callback;
+@@ -52,7 +52,7 @@ public class DeviceCodeDialog extends JDialog {
+         btnCopyLink = new JButton("Copy Link");
+         btnCancel = new JButton("Cancel");
+ 
+-        schedExec = new ScheduledThreadPoolExecutor(5);
++        schedExec = new ScheduledThreadPoolExecutor(1);
+         schedExec.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
+ 
+         addWindowListener(new WindowAdapter() {
+@@ -143,6 +143,7 @@ public class DeviceCodeDialog extends JDialog {
+     }
+ 
+     private void authHeartbeat() {
++        if (hasShutDown) return;
+         try {
+             MSDeviceCodeHeartbeatResponse heartbeat;
+             try {
+@@ -159,9 +160,12 @@ public class DeviceCodeDialog extends JDialog {
+ 
+             setStatus("Code received, logging in...", false);
+ 
+-            shutDown();
+-            dispose();
+-            callback.accept(heartbeat);
++            MSDeviceCodeHeartbeatResponse result = heartbeat;
++            SwingUtilities.invokeLater(() -> {
++                shutDown();
++                dispose();
++                callback.accept(result);
++            });
+         } catch (AuthenticationException ex) {
+             LOGGER.error("Error checking device authentication", ex);
+             handleAuthError("Failed to authenticate:\n" + ex.getClass().getSimpleName() + ": " + ex.getMessage());
+@@ -196,15 +200,17 @@ public class DeviceCodeDialog extends JDialog {
+         pgbProgress.setVisible(true);
+         btnCancel.setEnabled(false);
+ 
+-        schedExec.shutdown();
++        schedExec.shutdownNow();
+ 
+         try {
+-            if (!schedExec.awaitTermination(5, TimeUnit.SECONDS)) {
+-                LOGGER.warn("Failed to shut down scheduled executor in time... :(");
++            if (!schedExec.awaitTermination(2, TimeUnit.SECONDS)) {
++                LOGGER.warn("Device login executor did not stop in time.",
++                        schedExec.getActiveCount());
+             } else {
+                 LOGGER.info("Shut down device login executor.");
+             }
+         } catch (InterruptedException ex) {
++            LOGGER.warn("Interrupted while waiting for device login executor to shut down.");
+             Thread.currentThread().interrupt();
+         }
+     }
+diff --git a/src/main/java/dev/figboot/olauncher/launcher/runtime/JavaRuntimeManager.java b/src/main/java/dev/figboot/olauncher/launcher/runtime/JavaRuntimeManager.java
+index 0cf0f62..c1d444d 100644
+--- a/src/main/java/dev/figboot/olauncher/launcher/runtime/JavaRuntimeManager.java
++++ b/src/main/java/dev/figboot/olauncher/launcher/runtime/JavaRuntimeManager.java
+@@ -74,6 +74,7 @@ public class JavaRuntimeManager {
+         jrePlatformName = findPlatformName();
+         platformDirectory = runtimesDirectory.resolve(jrePlatformName);
+         executorService = new ExceptionalThreadPoolExecutor(4, 8, 30L, TimeUnit.SECONDS);
++        Runtime.getRuntime().addShutdownHook(new Thread(executorService::shutdown, "jre-executor-shutdown"));
+     }
+ 
+     public void reloadRuntimes() throws IOException {
+@@ -124,15 +125,17 @@ public class JavaRuntimeManager {
+     }
+ 
+     public List<RuntimesManifest.Runtime> getRuntimes(String component) {
++        Map<String, Map<String, List<RuntimesManifest.Runtime>>> snapshot;
+         synchronized (refreshingLock) {
+             if (refreshing) return Collections.emptyList();
++            snapshot = manifest;
+         }
+ 
+-        if (manifest == null || !manifest.containsKey(jrePlatformName)) {
++        if (snapshot == null || !snapshot.containsKey(jrePlatformName)) {
+             return Collections.emptyList();
+         }
+ 
+-        List<RuntimesManifest.Runtime> runtimes = manifest.get(jrePlatformName).get(component);
++        List<RuntimesManifest.Runtime> runtimes = snapshot.get(jrePlatformName).get(component);
+         if (runtimes == null) return Collections.emptyList();
+         return Collections.unmodifiableList(runtimes);
+     }
+@@ -181,24 +184,28 @@ public class JavaRuntimeManager {
+ 
+     public RuntimeFileList downloadFileList(String component, RuntimesManifest.Runtime runtime) throws IOException {
+         HttpURLConnection conn = (HttpURLConnection)runtime.getManifest().getUrl().openConnection();
+-        if (conn.getResponseCode() / 100 != 2) throw new RuntimeException("Error downloading component manifest '" + component + "': Received response " + conn.getResponseCode() + " " + conn.getResponseMessage());
+-
+-        MessageDigest digest;
+         try {
+-            digest = MessageDigest.getInstance("SHA-1");
+-        } catch (NoSuchAlgorithmException ex) {
+-            throw new RuntimeException(ex); // should not happen
+-        }
++            if (conn.getResponseCode() / 100 != 2) throw new RuntimeException("Error downloading component manifest '" + component + "': Received response " + conn.getResponseCode() + " " + conn.getResponseMessage());
+ 
+-        RuntimeFileList files;
+-        try (Reader reader = new BufferedReader(new InputStreamReader(new DigestInputStream(conn.getInputStream(), digest)))) {
+-            files = gson.fromJson(reader, RuntimeFileList.class);
+-        }
++            MessageDigest digest;
++            try {
++                digest = MessageDigest.getInstance("SHA-1");
++            } catch (NoSuchAlgorithmException ex) {
++                throw new RuntimeException(ex); // should not happen
++            }
++
++            RuntimeFileList files;
++            try (Reader reader = new BufferedReader(new InputStreamReader(new DigestInputStream(conn.getInputStream(), digest)))) {
++                files = gson.fromJson(reader, RuntimeFileList.class);
++            }
+ 
+-        String hash = String.format("%1$040x", new BigInteger(1, digest.digest()));
+-        if (!hash.equalsIgnoreCase(runtime.getManifest().getSha1()))
+-            throw new RuntimeException("Error downloading component manifest '" + component + "': The manifest hash does not match! (Expected " + runtime.getManifest().getSha1() + ", got " + hash + ")");
+-        return files;
++            String hash = String.format("%1$040x", new BigInteger(1, digest.digest()));
++            if (!hash.equalsIgnoreCase(runtime.getManifest().getSha1()))
++                throw new RuntimeException("Error downloading component manifest '" + component + "': The manifest hash does not match! (Expected " + runtime.getManifest().getSha1() + ", got " + hash + ")");
++            return files;
++        } finally {
++            conn.disconnect();
++        }
+     }
+ 
+     public void preDownloadRuntime(String component, RuntimesManifest.Runtime runtime, RuntimeFileList files) throws IOException {
+diff --git a/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateChecker.java b/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateChecker.java
+index a9d52eb..5ed9944 100644
+--- a/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateChecker.java
++++ b/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateChecker.java
+@@ -26,11 +26,18 @@ import java.time.Instant;
+ import java.time.temporal.ChronoUnit;
+ import java.util.Arrays;
+ import java.util.Comparator;
++import java.util.concurrent.ExecutorService;
++import java.util.concurrent.Executors;
+ 
+ public class LauncherUpdateChecker {
+     private static final Logger LOGGER = LogManager.getLogger();
+     private final Gson gson;
+     private LauncherUpdateInfo info;
++    private final ExecutorService checkerExecutor = Executors.newSingleThreadExecutor(r -> {
++        Thread t = new Thread(r, "update-checker");
++        t.setDaemon(true);
++        return t;
++    });
+ 
+     public LauncherUpdateChecker() {
+         gson = new GsonBuilder()
+@@ -144,17 +151,14 @@ public class LauncherUpdateChecker {
+             return;
+         }
+ 
+-        Thread checker = new Thread(() -> {
++        LOGGER.info("Querying latest release on {} channel...", new Object[]{info.getChannel()});
++        checkerExecutor.submit(() -> {
+             try {
+                 queryReleases();
+             } catch (IOException ex) {
+                 LOGGER.error("Error querying latest release", ex);
+             }
+         });
+-
+-        LOGGER.info("Querying latest release on {} channel...", new Object[]{info.getChannel()});
+-        checker.setDaemon(true);
+-        checker.start();
+     }
+ 
+     private void queryReleases() throws IOException {
+@@ -175,39 +179,47 @@ public class LauncherUpdateChecker {
+ 
+     private ReleaseInfo queryLatestStableRelease() throws IOException {
+         HttpURLConnection conn = openConnection(OLauncherConstants.GITHUB_LATEST_RELEASE_URL);
+-        if (conn.getResponseCode() / 100 != 2) {
+-            LOGGER.error("Error response from server: {} {}", new Object[]{conn.getResponseCode(), conn.getResponseMessage()});
+-            return null;
+-        }
+-        try (Reader r = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
+-            return gson.fromJson(r, ReleaseInfo.class);
++        try {
++            if (conn.getResponseCode() / 100 != 2) {
++                LOGGER.error("Error response from server: {} {}", new Object[]{conn.getResponseCode(), conn.getResponseMessage()});
++                return null;
++            }
++            try (Reader r = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
++                return gson.fromJson(r, ReleaseInfo.class);
++            }
++        } finally {
++            conn.disconnect();
+         }
+     }
+ 
+     private ReleaseInfo queryLatestPrerelease() throws IOException {
+         HttpURLConnection conn = openConnection(OLauncherConstants.GITHUB_RELEASES_URL);
+-        if (conn.getResponseCode() / 100 != 2) {
+-            LOGGER.error("Error response from server: {} {}", new Object[]{conn.getResponseCode(), conn.getResponseMessage()});
+-            return null;
+-        }
+-        try (Reader r = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
+-            ReleaseInfo[] releases = gson.fromJson(r, ReleaseInfo[].class);
+-
+-            ReleaseInfo latestPrerelease = Arrays.stream(releases)
+-                    .filter(ReleaseInfo::isPrerelease)
+-                    .max(Comparator.comparing(ReleaseInfo::getCreatedAt))
+-                    .orElse(null);
+-
+-            // A stable release flagged with "dev-channel: true" is also offered on the dev channel, but only if no newer dev release exists
+-            ReleaseInfo latestFlaggedStable = Arrays.stream(releases)
+-                    .filter(rel -> !rel.isPrerelease() && rel.isDevChannelFlagged())
+-                    .max(Comparator.comparing(ReleaseInfo::getCreatedAt))
+-                    .orElse(null);
+-
+-            if (latestPrerelease == null) return latestFlaggedStable;
+-            if (latestFlaggedStable == null) return latestPrerelease;
+-            return latestFlaggedStable.getCreatedAt().isAfter(latestPrerelease.getCreatedAt())
+-                    ? latestFlaggedStable : latestPrerelease;
++        try {
++            if (conn.getResponseCode() / 100 != 2) {
++                LOGGER.error("Error response from server: {} {}", new Object[]{conn.getResponseCode(), conn.getResponseMessage()});
++                return null;
++            }
++            try (Reader r = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
++                ReleaseInfo[] releases = gson.fromJson(r, ReleaseInfo[].class);
++
++                ReleaseInfo latestPrerelease = Arrays.stream(releases)
++                        .filter(ReleaseInfo::isPrerelease)
++                        .max(Comparator.comparing(ReleaseInfo::getCreatedAt))
++                        .orElse(null);
++
++                // A stable release flagged with "dev-channel: true" is also offered on the dev channel, but only if no newer dev release exists
++                ReleaseInfo latestFlaggedStable = Arrays.stream(releases)
++                        .filter(rel -> !rel.isPrerelease() && rel.isDevChannelFlagged())
++                        .max(Comparator.comparing(ReleaseInfo::getCreatedAt))
++                        .orElse(null);
++
++                if (latestPrerelease == null) return latestFlaggedStable;
++                if (latestFlaggedStable == null) return latestPrerelease;
++                return latestFlaggedStable.getCreatedAt().isAfter(latestPrerelease.getCreatedAt())
++                        ? latestFlaggedStable : latestPrerelease;
++            }
++        } finally {
++            conn.disconnect();
+         }
+     }
+ 
+diff --git a/src/main/java/net/minecraft/launcher/Launcher.java b/src/main/java/net/minecraft/launcher/Launcher.java
+index 9ccae09..905bb9e 100644
+--- a/src/main/java/net/minecraft/launcher/Launcher.java
++++ b/src/main/java/net/minecraft/launcher/Launcher.java
+@@ -70,7 +70,7 @@ import org.apache.logging.log4j.LogManager;
+ import org.apache.logging.log4j.Logger;
+ 
+ public class Launcher {
+-    private static Launcher INSTANCE;
++    private static volatile Launcher INSTANCE;
+     private static final Logger LOGGER;
+     private final com.mojang.launcher.Launcher launcher;
+     private final Integer bootstrapVersion;
+@@ -121,20 +121,19 @@ public class Launcher {
+             this.launcher = new com.mojang.launcher.Launcher(this.userInterface, var2, var3, var4, new MinecraftVersionManager(new LocalVersionList(var2), new RemoteVersionList(LauncherConstants.PROPERTIES.getVersionManifest(), var3, this)), Agent.MINECRAFT, MinecraftReleaseTypeFactory.instance(), 21);
+             this.profileManager = new ProfileManager(this);
+ 
+-            // load update checker before the frame so AboutTab can reference it
++            // Create update checker before the frame so AboutTab can reference the instance
+             this.updateChecker = new LauncherUpdateChecker();
++
++            ((SwingUserInterface)this.userInterface).initializeFrame();
++            refreshJavaRuntimes(); // olauncher - refresh java runtimes
++            this.refreshVersionsAndProfiles();
++
+             try {
+                 this.updateChecker.loadInfo();
+             } catch (IOException ex) {
+                 LOGGER.error("Error loading update checker state. Update checking will not continue.", ex);
+                 this.updateChecker = null;
+             }
+-
+-            ((SwingUserInterface)this.userInterface).initializeFrame();
+-            refreshJavaRuntimes(); // olauncher - refresh java runtimes
+-            this.refreshVersionsAndProfiles();
+-
+-            // trigger update check after frame is ready
+             if (this.updateChecker != null) {
+                 try {
+                     this.updateChecker.updateCheck();
+@@ -212,17 +211,10 @@ public class Launcher {
+             }
+         });
+     }
+-    // olauncher end
+ 
+     public void refreshVersionsAndProfiles() {
+         this.getLauncher().getVersionManager().getExecutorService().submit(new Runnable() {
+             public void run() {
+-                try {
+-                    Launcher.this.getLauncher().getVersionManager().refreshVersions();
+-                } catch (Throwable var7) {
+-                    Launcher.LOGGER.error("Unexpected exception refreshing version list", var7);
+-                }
+-
+                 try {
+                     Launcher.this.profileManager.loadProfiles();
+                     Launcher.LOGGER.info("Loaded " + Launcher.this.profileManager.getProfiles().size() + " instance(s); selected '" + Launcher.this.profileManager.getSelectedProfile().getName() + "'");
+@@ -257,6 +249,16 @@ public class Launcher {
+                 Launcher.this.ensureLoggedIn();
+             }
+         });
++
++        this.getLauncher().getVersionManager().getExecutorService().submit(new Runnable() {
++            public void run() {
++                try {
++                    Launcher.this.getLauncher().getVersionManager().refreshVersions();
++                } catch (Throwable var1) {
++                    Launcher.LOGGER.error("Unexpected exception refreshing version list", var1);
++                }
++            }
++        });
+     }
+ 
+     private MinecraftUserInterface selectUserInterface(JFrame var1) {
+@@ -299,6 +301,7 @@ public class Launcher {
+                 this.getUserInterface().showLoginPrompt();
+             }
+         } else if (!var1.canPlayOnline()) {
++            this.profileManager.fireRefreshEvent();
+             try {
+                 LOGGER.info("Refreshing auth...");
+                 var1.logIn();
+diff --git a/src/main/java/net/minecraft/launcher/Main.java b/src/main/java/net/minecraft/launcher/Main.java
+index 6c046c0..a23c86f 100644
+--- a/src/main/java/net/minecraft/launcher/Main.java
++++ b/src/main/java/net/minecraft/launcher/Main.java
+@@ -97,7 +97,6 @@ public class Main {
+             var16.setWinTenHack();
+         }
+ 
+-        var12.setLocationRelativeTo((Component)null);
+         LOGGER.debug("End of main.");
+     }
+ 
+diff --git a/src/main/java/net/minecraft/launcher/SwingUserInterface.java b/src/main/java/net/minecraft/launcher/SwingUserInterface.java
+index 7f87914..4923796 100644
+--- a/src/main/java/net/minecraft/launcher/SwingUserInterface.java
++++ b/src/main/java/net/minecraft/launcher/SwingUserInterface.java
+@@ -7,19 +7,16 @@ import com.mojang.launcher.OperatingSystem;
+ import com.mojang.launcher.events.GameOutputLogProcessor;
+ import com.mojang.launcher.updater.DownloadProgress;
+ import com.mojang.launcher.versions.CompleteVersion;
+-import java.awt.Dimension;
+ import java.awt.event.WindowAdapter;
+ import java.awt.event.WindowEvent;
+ import java.io.File;
+ import java.io.IOException;
+-import java.io.InputStream;
+ import java.net.URI;
+ import java.net.URISyntaxException;
+ import java.util.Timer;
+ import java.util.TimerTask;
+ import java.util.UUID;
+ import java.util.concurrent.TimeUnit;
+-import javax.imageio.ImageIO;
+ import javax.swing.BorderFactory;
+ import javax.swing.Icon;
+ import javax.swing.JFrame;
+@@ -56,36 +53,29 @@ public class SwingUserInterface implements MinecraftUserInterface {
+     }
+ 
+     private static void setLookAndFeel() {
+-        JFrame var0 = new JFrame();
+-
+         try {
+             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+-        } catch (Throwable var7) {
++        } catch (Throwable var1) {
+             try {
+                 LOGGER.error("Your java failed to provide normal look and feel, trying the old fallback now");
+                 UIManager.setLookAndFeel(UIManager.getCrossPlatformLookAndFeelClassName());
+-            } catch (Throwable var6) {
+-                LOGGER.error("Unexpected exception setting look and feel", var6);
++            } catch (Throwable var2) {
++                LOGGER.error("Unexpected exception setting look and feel", var2);
+             }
+         }
+ 
+-        JPanel var1 = new JPanel();
+-        var1.setBorder(BorderFactory.createTitledBorder("test"));
+-        var0.add(var1);
+-
+         try {
+-            var0.pack();
+-        } catch (Throwable var5) {
++            JPanel probe = new JPanel();
++            probe.setBorder(BorderFactory.createTitledBorder("test"));
++            probe.getPreferredSize();
++        } catch (Throwable var3) {
+             LOGGER.error("Custom (broken) theme detected, falling back onto x-platform theme");
+-
+             try {
+                 UIManager.setLookAndFeel(UIManager.getCrossPlatformLookAndFeelClassName());
+             } catch (Throwable var4) {
+                 LOGGER.error("Unexpected exception setting look and feel", var4);
+             }
+         }
+-
+-        var0.dispose();
+     }
+ 
+     public void showLoginPrompt(final Launcher var1, final LogInPopup.Callback var2) {
+@@ -99,8 +89,6 @@ public class SwingUserInterface implements MinecraftUserInterface {
+ 
+     public void initializeFrame() {
+         this.frame.getContentPane().removeAll();
+-        this.frame.setTitle(WINDOW_TITLE == null ? LauncherVersion.getLauncherName() + " " + LauncherVersion.getVersion() + LauncherConstants.PROPERTIES.getEnvironment().getTitle() : WINDOW_TITLE); // olauncher - update version
+-        this.frame.setPreferredSize(new Dimension(900, 580));
+         this.frame.setDefaultCloseOperation(2);
+         this.frame.addWindowListener(new WindowAdapter() {
+             public void windowClosing(WindowEvent var1) {
+@@ -124,14 +112,6 @@ public class SwingUserInterface implements MinecraftUserInterface {
+             }
+         });
+ 
+-        try {
+-            InputStream var1 = Launcher.class.getResourceAsStream("/favicon.png");
+-            if (var1 != null) {
+-                this.frame.setIconImage(ImageIO.read(var1));
+-            }
+-        } catch (IOException var2) {
+-        }
+-
+         this.launcherPanel = new LauncherPanel(this.minecraftLauncher);
+         SwingUtilities.invokeLater(new Runnable() {
+             public void run() {
+diff --git a/src/main/java/net/minecraft/launcher/updater/LocalVersionList.java b/src/main/java/net/minecraft/launcher/updater/LocalVersionList.java
+index f7e0b56..5ef9270 100644
+--- a/src/main/java/net/minecraft/launcher/updater/LocalVersionList.java
++++ b/src/main/java/net/minecraft/launcher/updater/LocalVersionList.java
+@@ -25,10 +25,6 @@ public class LocalVersionList extends FileBasedVersionList {
+         if (var1 != null && var1.isDirectory()) {
+             this.baseDirectory = var1;
+             this.baseVersionsDir = new File(this.baseDirectory, "versions");
+-            if (!this.baseVersionsDir.isDirectory()) {
+-                this.baseVersionsDir.mkdirs();
+-            }
+-
+         } else {
+             throw new IllegalArgumentException("Base directory is not a folder!");
+         }
+@@ -39,6 +35,9 @@ public class LocalVersionList extends FileBasedVersionList {
+     }
+ 
+     public void refreshVersions() throws IOException {
++        if (!this.baseVersionsDir.isDirectory()) {
++            this.baseVersionsDir.mkdirs();
++        }
+         this.clearCache();
+         File[] var1 = this.baseVersionsDir.listFiles();
+         if (var1 != null) {
+diff --git a/src/main/java/net/minecraft/launcher/updater/MinecraftVersionManager.java b/src/main/java/net/minecraft/launcher/updater/MinecraftVersionManager.java
+index 95b5886..43de76e 100644
+--- a/src/main/java/net/minecraft/launcher/updater/MinecraftVersionManager.java
++++ b/src/main/java/net/minecraft/launcher/updater/MinecraftVersionManager.java
+@@ -22,6 +22,7 @@ import java.io.IOException;
+ import java.io.InputStream;
+ import java.net.Proxy;
+ import java.net.URL;
++import java.nio.charset.StandardCharsets;
+ import java.util.ArrayList;
+ import java.util.Collection;
+ import java.util.Collections;
+@@ -335,7 +336,7 @@ public class MinecraftVersionManager implements VersionManager {
+         try {
+             URL var13 = var11.getUrl();
+             var5 = var13.openConnection(var1).getInputStream();
+-            String var14 = IOUtils.toString(var5);
++            String var14 = IOUtils.toString(var5, StandardCharsets.UTF_8);
+             FileUtils.writeStringToFile(var12, var14);
+             AssetIndex var15 = (AssetIndex)this.gson.fromJson(var14, AssetIndex.class);
+             Iterator var16 = var15.getUniqueObjects().entrySet().iterator();
+-- 
+2.53.0
+
