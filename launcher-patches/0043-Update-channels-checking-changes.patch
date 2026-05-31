@@ -1,30 +1,9 @@
-From 86428ae22ca6a3c6db0995421af4db69eac3f059 Mon Sep 17 00:00:00 2001
+From 66f2ab999335a71e9d9d955e3bffa37e9d7e137b Mon Sep 17 00:00:00 2001
 From: RagedMeteor1837 <148640131+RagedMeteor1837@users.noreply.github.com>
 Date: Sun, 29 Mar 2026 20:34:46 +0100
 Subject: [PATCH] Update channels & checking changes
 
 
-diff --git a/pom.xml b/pom.xml
-index 13ad9bd..cb29589 100644
---- a/pom.xml
-+++ b/pom.xml
-@@ -112,13 +112,15 @@
-                             <generateGitPropertiesFilename>${project.build.outputDirectory}/ver/git-outer.properties</generateGitPropertiesFilename>
-                             <dotGitDirectory>../.git</dotGitDirectory>
-                             <gitDescribe>
--                                <tags>true</tags> <!-- include unannotated tags (occurs during shallow clones) -->
-+                                <tags>true</tags> 
-+                                <match>v*</match> 
-                             </gitDescribe>
-                             <includeOnlyProperties>
-                                 <property>^git.closest.tag.name$</property>
-                                 <property>^git.closest.tag.commit.count$</property>
-                                 <property>^git.dirty$</property>
-                                 <property>^git.commit.id.abbrev$</property>
-+                                <property>^git.commit.id$</property>
-                             </includeOnlyProperties>
-                         </configuration>
-                     </execution>
 diff --git a/src/main/java/dev/figboot/olauncher/OLauncherConstants.java b/src/main/java/dev/figboot/olauncher/OLauncherConstants.java
 index 7a1909a..170033c 100644
 --- a/src/main/java/dev/figboot/olauncher/OLauncherConstants.java

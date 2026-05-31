@@ -1,4 +1,4 @@
-From bc1d2a340a400b5fb2410d279ae35d1976d0dc8d Mon Sep 17 00:00:00 2001
+From 42b796924923021c13f71cb193a4d801f46acae0 Mon Sep 17 00:00:00 2001
 From: bigfoot547 <bigfoot@figboot.dev>
 Date: Thu, 10 Mar 2022 01:37:59 -0600
 Subject: [PATCH] Add maven project
@@ -314,10 +314,10 @@ index 6c5d5ec..0000000
 -
 diff --git a/pom.xml b/pom.xml
 new file mode 100644
-index 0000000..6c6b911
+index 0000000..d5b7184
 --- /dev/null
 +++ b/pom.xml
-@@ -0,0 +1,226 @@
+@@ -0,0 +1,228 @@
 +<?xml version="1.0" encoding="UTF-8"?>
 +
 +<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -332,7 +332,7 @@ index 0000000..6c6b911
 +    </parent>
 +
 +    <artifactId>olauncher</artifactId>
-+    <version>2.3.0</version>
++    <version>2.3.1</version>
 +
 +    <properties>
 +        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -432,13 +432,15 @@ index 0000000..6c6b911
 +                            <generateGitPropertiesFilename>${project.build.outputDirectory}/ver/git-outer.properties</generateGitPropertiesFilename>
 +                            <dotGitDirectory>../.git</dotGitDirectory>
 +                            <gitDescribe>
-+                                <tags>true</tags> <!-- include unannotated tags (occurs during shallow clones) -->
++                                <tags>true</tags> 
++                                <match>v*</match> 
 +                            </gitDescribe>
 +                            <includeOnlyProperties>
 +                                <property>^git.closest.tag.name$</property>
 +                                <property>^git.closest.tag.commit.count$</property>
 +                                <property>^git.dirty$</property>
 +                                <property>^git.commit.id.abbrev$</property>
++                                <property>^git.commit.id$</property>
 +                            </includeOnlyProperties>
 +                        </configuration>
 +                    </execution>
