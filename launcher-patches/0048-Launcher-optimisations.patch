@@ -1,4 +1,4 @@
-From f9559d45974a459e7639d0a5840dd23f66e7482b Mon Sep 17 00:00:00 2001
+From 11f466ace0de90742cc176538832967b1be902a0 Mon Sep 17 00:00:00 2001
 From: RagedMeteor1837 <148640131+RagedMeteor1837@users.noreply.github.com>
 Date: Sat, 9 May 2026 23:43:30 +0100
 Subject: [PATCH] Launcher optimisations
@@ -177,7 +177,7 @@ index 0cf0f62..c1d444d 100644
  
      public void preDownloadRuntime(String component, RuntimesManifest.Runtime runtime, RuntimeFileList files) throws IOException {
 diff --git a/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateChecker.java b/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateChecker.java
-index a9d52eb..5ed9944 100644
+index e243233..7a2c95a 100644
 --- a/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateChecker.java
 +++ b/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateChecker.java
 @@ -26,11 +26,18 @@ import java.time.Instant;
@@ -199,7 +199,7 @@ index a9d52eb..5ed9944 100644
  
      public LauncherUpdateChecker() {
          gson = new GsonBuilder()
-@@ -144,17 +151,14 @@ public class LauncherUpdateChecker {
+@@ -151,17 +158,14 @@ public class LauncherUpdateChecker {
              return;
          }
  
@@ -219,7 +219,7 @@ index a9d52eb..5ed9944 100644
      }
  
      private void queryReleases() throws IOException {
-@@ -175,39 +179,47 @@ public class LauncherUpdateChecker {
+@@ -182,39 +186,47 @@ public class LauncherUpdateChecker {
  
      private ReleaseInfo queryLatestStableRelease() throws IOException {
          HttpURLConnection conn = openConnection(OLauncherConstants.GITHUB_LATEST_RELEASE_URL);
@@ -529,5 +529,5 @@ index 95b5886..43de76e 100644
              AssetIndex var15 = (AssetIndex)this.gson.fromJson(var14, AssetIndex.class);
              Iterator var16 = var15.getUniqueObjects().entrySet().iterator();
 -- 
-2.53.0
+2.54.0.windows.1
 

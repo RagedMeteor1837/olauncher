@@ -1,4 +1,4 @@
-From 66f2ab999335a71e9d9d955e3bffa37e9d7e137b Mon Sep 17 00:00:00 2001
+From 4d897778ea7d04f5f64954b10c51cc46b3d0731d Mon Sep 17 00:00:00 2001
 From: RagedMeteor1837 <148640131+RagedMeteor1837@users.noreply.github.com>
 Date: Sun, 29 Mar 2026 20:34:46 +0100
 Subject: [PATCH] Update channels & checking changes
@@ -458,10 +458,10 @@ index ec2e6a1..7270683 100644
          job.addDownloadables(downloadables);
 diff --git a/src/main/java/dev/figboot/olauncher/launcher/update/LauncherSelfUpdater.java b/src/main/java/dev/figboot/olauncher/launcher/update/LauncherSelfUpdater.java
 new file mode 100644
-index 0000000..bf8ad76
+index 0000000..9e6efd6
 --- /dev/null
 +++ b/src/main/java/dev/figboot/olauncher/launcher/update/LauncherSelfUpdater.java
-@@ -0,0 +1,296 @@
+@@ -0,0 +1,304 @@
 +// LauncherSelfUpdater.java
 +
 +package dev.figboot.olauncher.launcher.update;
@@ -667,6 +667,14 @@ index 0000000..bf8ad76
 +            LOGGER.warn("Could not clear update cache before restart", ex);
 +        }
 +
++        // olauncher - changes for https://github.com/RagedMeteor1837/olauncher/issues/16
++        try {
++            checker.prepareChannelForRestart(release.isPrerelease());
++        } catch (IOException ex) {
++            LOGGER.warn("Could not update build type flag before restart", ex);
++        }
++
++
 +        int choice = JOptionPane.showConfirmDialog(owner,
 +                "Update downloaded and verified.\nThe launcher will now restart to apply " + release.getTagName() + ".",
 +                "Restart to Update",
@@ -759,7 +767,7 @@ index 0000000..bf8ad76
 +    }
 +}
 diff --git a/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateChecker.java b/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateChecker.java
-index 7541190..a9d52eb 100644
+index 7541190..e243233 100644
 --- a/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateChecker.java
 +++ b/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateChecker.java
 @@ -2,9 +2,14 @@ package dev.figboot.olauncher.launcher.update;
@@ -823,7 +831,7 @@ index 7541190..a9d52eb 100644
              saveInfo();
              return;
          }
-@@ -54,24 +57,76 @@ public class LauncherUpdateChecker {
+@@ -54,24 +57,83 @@ public class LauncherUpdateChecker {
          try (Reader r = Files.newBufferedReader(infoFile)) {
              info = gson.fromJson(r, LauncherUpdateInfo.class);
          }
@@ -898,10 +906,17 @@ index 7541190..a9d52eb 100644
 +        saveInfo();
 +    }
 +
++
++    // olauncher - fix for https://github.com/RagedMeteor1837/olauncher/issues/16
++    public void prepareChannelForRestart(boolean newBuildIsDev) throws IOException {
++        info.setDevBuild(newBuildIsDev);
++        saveInfo();
++    }
++
      public void updateCheck() throws IOException {
          if (info == null) throw new IllegalStateException("Call loadInfo first!");
  
-@@ -80,19 +135,11 @@ public class LauncherUpdateChecker {
+@@ -80,19 +142,11 @@ public class LauncherUpdateChecker {
              return;
          }
  
@@ -923,7 +938,7 @@ index 7541190..a9d52eb 100644
              onReleaseResponse();
              return;
          }
-@@ -105,54 +152,112 @@ public class LauncherUpdateChecker {
+@@ -105,54 +159,112 @@ public class LauncherUpdateChecker {
              }
          });
  
@@ -942,19 +957,19 @@ index 7541190..a9d52eb 100644
 +        ReleaseInfo release = info.getChannel() == UpdateChannel.DEV
 +                ? queryLatestPrerelease()
 +                : queryLatestStableRelease();
- 
--        ReleaseInfo release;
++
 +        if (release == null) {
 +            LOGGER.warn("No suitable release found on the {} channel.", new Object[]{info.getChannel()});
 +            return;
 +        }
  
+-        ReleaseInfo release;
 +        info.setLastCheck(Instant.now());
 +        info.setLatestRelease(release);
 +        saveInfo();
 +        onReleaseResponse();
 +    }
-+
+ 
 +    private ReleaseInfo queryLatestStableRelease() throws IOException {
 +        HttpURLConnection conn = openConnection(OLauncherConstants.GITHUB_LATEST_RELEASE_URL);
          if (conn.getResponseCode() / 100 != 2) {
@@ -962,10 +977,10 @@ index 7541190..a9d52eb 100644
 -            return;
 +            LOGGER.error("Error response from server: {} {}", new Object[]{conn.getResponseCode(), conn.getResponseMessage()});
 +            return null;
-         }
++        }
 +        try (Reader r = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
 +            return gson.fromJson(r, ReleaseInfo.class);
-+        }
+         }
 +    }
  
 +    private ReleaseInfo queryLatestPrerelease() throws IOException {
