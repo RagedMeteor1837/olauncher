@@ -57,17 +57,15 @@ if [ ! -e "jbsdiff" ]; then
   fi
 fi
 
-if [ ! -e "$autooldir/target" ]; then
-  echo "AutoOL target directory not found, compiling..."
-  pushd "$autooldir"
-  mvn clean package
-  mvnresult="$?"
-  popd
+echo "Building AutoOL..."
+pushd "$autooldir"
+mvn clean package
+mvnresult="$?"
+popd
 
-  if [ "$mvnresult" != "0" ]; then
-    echo "Error building AutoOL"
-    exit 1
-  fi
+if [ "$mvnresult" != "0" ]; then
+  echo "Error building AutoOL"
+  exit 1
 fi
 
 echo "Generating patch..."
@@ -89,6 +87,7 @@ finalhash=$(sha1sum "$basedir/olauncher/target/olauncher-${OLAUNCHER_VERSION}.ja
 finalname=patched.jar
 finalsz=$(du -b "$basedir/olauncher/target/olauncher-${OLAUNCHER_VERSION}.jar" | cut -f 1)
 interactive=true
+buildtimestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 #mainClass=
 EOP
 ) > "patch.properties"

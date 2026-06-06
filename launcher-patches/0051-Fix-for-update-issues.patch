@@ -1,0 +1,75 @@
+From 11505e210b788ac39e30a3f4624e79af6d07f2ea Mon Sep 17 00:00:00 2001
+From: RagedMeteor1837 <148640131+RagedMeteor1837@users.noreply.github.com>
+Date: Sat, 6 Jun 2026 15:21:19 +0100
+Subject: [PATCH] Fix for update issues
+
+
+diff --git a/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateChecker.java b/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateChecker.java
+index 7a2c95a..84c2a57 100644
+--- a/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateChecker.java
++++ b/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateChecker.java
+@@ -10,6 +10,8 @@ import net.minecraft.launcher.Main;
+ import net.minecraft.launcher.SwingUserInterface;
+ 
+ import javax.swing.JFrame;
++import javax.swing.JOptionPane;
++import javax.swing.SwingUtilities;
+ import org.apache.logging.log4j.LogManager;
+ import org.apache.logging.log4j.Logger;
+ 
+@@ -141,6 +143,28 @@ public class LauncherUpdateChecker {
+         saveInfo();
+     }
+ 
++
++    // olauncher - fix update error
++    public void showRedistWarningIfNeeded(JFrame parent) {
++        if (info == null || info.isRedistWarningShown()) return;
++        info.setRedistWarningShown(true);
++        try {
++            saveInfo();
++        } catch (IOException ex) {
++            LOGGER.warn("Could not persist redist warning flag", ex);
++        }
++        SwingUtilities.invokeLater(() ->
++            JOptionPane.showMessageDialog(parent,
++                "<html><b>Important: please re-download the launcher JAR</b><br><br>" +
++                "A bug in v2.3.1 causes the launcher to downgrade itself if launched<br>" +
++                "directly from the <b>olauncher-x.x.x-redist.jar</b> file.<br><br>" +
++                "This is fixed in v2.3.2. If you have a redist JAR saved anywhere,<br>" +
++                "please manually replace it with the latest one from GitHub.<br><br>" +
++                "If you launch via <b>.minecraft/autool/patched.jar</b> you are not affected.</html>",
++                "Action Required",
++                JOptionPane.WARNING_MESSAGE));
++    }
++
+     public void updateCheck() throws IOException {
+         if (info == null) throw new IllegalStateException("Call loadInfo first!");
+ 
+diff --git a/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateInfo.java b/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateInfo.java
+index 16c7824..51e7a60 100644
+--- a/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateInfo.java
++++ b/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateInfo.java
+@@ -15,6 +15,7 @@ public class LauncherUpdateInfo {
+     @Getter @Setter private ReleaseInfo latestRelease;
+     @Getter @Setter private UpdateChannel channel;
+     @Getter @Setter private boolean devBuild;
++    @Getter @Setter private boolean redistWarningShown;
+ 
+     public static LauncherUpdateInfo defaults() {
+         LauncherUpdateInfo info = new LauncherUpdateInfo();
+diff --git a/src/main/java/net/minecraft/launcher/Launcher.java b/src/main/java/net/minecraft/launcher/Launcher.java
+index 905bb9e..d525bd1 100644
+--- a/src/main/java/net/minecraft/launcher/Launcher.java
++++ b/src/main/java/net/minecraft/launcher/Launcher.java
+@@ -135,6 +135,7 @@ public class Launcher {
+                 this.updateChecker = null;
+             }
+             if (this.updateChecker != null) {
++                this.updateChecker.showRedistWarningIfNeeded(((SwingUserInterface) this.userInterface).getFrame());
+                 try {
+                     this.updateChecker.updateCheck();
+                 } catch (IOException ex) {
+-- 
+2.54.0.windows.1
+
