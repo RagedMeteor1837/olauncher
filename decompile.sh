@@ -22,26 +22,59 @@ workdir=$basedir/work
 extractdir=$workdir/extract
 decompdir=$workdir/decomp
 
-if [ ! -e "$workdir/launcher.jar" ]; then
-    echo "Downloading vanilla launcher..."
+launcher_jar_url="https://launcher.mojang.com/v1/objects/eabbff5ff8e21250e33670924a0c5e38f47c840b/launcher.jar"
+bootstrap_jar_url="https://web.archive.org/web/20221007091726if_/https://s3.amazonaws.com/Minecraft.Download/launcher/Minecraft.jar"
+
+checkLocalFile() {
+    local_file=$1
+    download_url=$2
+    file_desc=$3
+
+    if [ ! -e "$workdir/$1" ]; then
+    echo "Downloading $3..."
     mkdir -p work
-    if ! curl -o work/launcher.jar https://launcher.mojang.com/v1/objects/eabbff5ff8e21250e33670924a0c5e38f47c840b/launcher.jar > /dev/null; then
-        echo "Failed to download launcher jar"
+    if ! curl -o "work/$1" "$2" > /dev/null; then
+        echo "Failed to download $3!"
         exit 1
     fi
 fi
+}
 
-if [ ! -e "$extractdir" ]; then
-    echo "Extracting classes..."
-    mkdir -pv "$extractdir"
-    pushd work/extract
-    if ! jar xf ../launcher.jar; then
-        echo "Failed to extract jar"
+class_extract() {
+    source_file=$1
+    target_dir=$2
+    file_desc=$3
+    echo "Extracting classes for $3..."
+    mkdir -pv "$extractdir/$target_dir"
+    pushd "$extractdir/$target_dir"
+    if ! jar xf ../../$source_file; then
+        echo "Failed to extract jar for $3"
         exit 1
     fi
+    popd
+}
 
-    echo "Pruning classes..."
+checkLocalFile "launcher.jar" "$launcher_jar_url" "vanilla launcher"
+checkLocalFile "bootstrap.jar" "$bootstrap_jar_url" "vanilla launcher bootstrap"
+
+
+if [ ! -e "$extractdir" ]; then
+    class_extract launcher.jar launcher "vanilla launcher"
+    class_extract bootstrap.jar bootstrap "vanilla launcher bootstrap"
+    
+    pushd "$extractdir"
+
+
+    pushd "launcher"
+    echo "Pruning classes for the launcher..."
     rm -rf org joptsimple javax com/google
+    popd
+
+    pushd "bootstrap"
+    echo "Pruning classes for the bootstrap..."
+    rm -rf joptsimple LZMA com/google
+    popd
+
     popd
 fi
 
