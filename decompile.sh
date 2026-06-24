@@ -81,7 +81,7 @@ if [ ! -e "$extractdir" ]; then
 
     pushd "bootstrap"
     echo "Pruning classes for the bootstrap..."
-    rm -rf joptsimple LZMA com/google
+    rm -rf joptsimple com/google
     popd
 
     popd
