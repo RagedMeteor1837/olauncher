@@ -22,7 +22,7 @@ workdir=$basedir/work
 decompdir=$workdir/decomp
 
 vanilla_launcher_dir=$basedir/launcher
-vanilla_bootstrap_dir=$basedir/bootstrap_vanilla
+vanilla_bootstrap_dir=$basedir/bootstrap
 
 init_component() {
     decomp_comp_name=$1

@@ -54,6 +54,15 @@ class_extract() {
     popd
 }
 
+decompile_component() {
+    component=$1
+    mkdir -pv "$decompdir/$component"
+    if ! java -jar tools/fernflower.jar -dgs=1 -hdc=0 -asc=1 -udv=0 -ind="    " "$extractdir/$component" "$decompdir/$component"; then
+        echo "Failed to decompile classes"
+        exit 1
+    fi
+}
+
 checkLocalFile "launcher.jar" "$launcher_jar_url" "vanilla launcher"
 checkLocalFile "bootstrap.jar" "$bootstrap_jar_url" "vanilla launcher bootstrap"
 
@@ -80,9 +89,6 @@ fi
 
 if [ ! -e "$decompdir" ]; then
     echo "Decompiling..."
-    mkdir -pv "$decompdir"
-    if ! java -jar tools/fernflower.jar -dgs=1 -hdc=0 -asc=1 -udv=0 -ind="    " "$extractdir" "$decompdir"; then
-        echo "Failed to decompile classes"
-        exit 1
-    fi
+    decompile_component launcher
+    decompile_component bootstrap
 fi
