@@ -12,6 +12,7 @@
 
     <modules>
         <module>olauncher</module>
+        <module>bootstrap-olauncher</module>
     </modules>
 
     <properties>

@@ -50,4 +50,18 @@ rebuildPatches() {
     cleanupPatches "${from}-patches"
 }
 
-rebuildPatches launcher olauncher
+if [ "$1" = "launcher" ] || [ -z "$1" ]; then
+    rebuildPatches launcher olauncher
+elif [ "$1" = "bootstrap" ]; then
+    rebuildPatches bootstrap bootstrap-olauncher
+elif [ "$1" = "all" ]; then
+    rebuildPatches launcher olauncher
+    rebuildPatches bootstrap bootstrap-olauncher
+else
+  echo "Target '$1' for rebuilding patches not found. Accepted targets are:"
+  echo "   launcher"
+  echo "   bootstrap"
+  echo "   all"
+  echo "If not specified, the default target is launcher"
+  exit 1
+fi
