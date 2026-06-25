@@ -1,4 +1,4 @@
-From 11505e210b788ac39e30a3f4624e79af6d07f2ea Mon Sep 17 00:00:00 2001
+From 4115a6b5f511c7f5a1c9bb4b659f7d480c578431 Mon Sep 17 00:00:00 2001
 From: RagedMeteor1837 <148640131+RagedMeteor1837@users.noreply.github.com>
 Date: Sat, 6 Jun 2026 15:21:19 +0100
 Subject: [PATCH] Fix for update issues
@@ -47,7 +47,7 @@ index 7a2c95a..84c2a57 100644
          if (info == null) throw new IllegalStateException("Call loadInfo first!");
  
 diff --git a/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateInfo.java b/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateInfo.java
-index 16c7824..51e7a60 100644
+index 16c7824..ced383e 100644
 --- a/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateInfo.java
 +++ b/src/main/java/dev/figboot/olauncher/launcher/update/LauncherUpdateInfo.java
 @@ -15,6 +15,7 @@ public class LauncherUpdateInfo {
@@ -58,6 +58,14 @@ index 16c7824..51e7a60 100644
  
      public static LauncherUpdateInfo defaults() {
          LauncherUpdateInfo info = new LauncherUpdateInfo();
+@@ -24,6 +25,7 @@ public class LauncherUpdateInfo {
+         info.latestRelease = null;
+         info.channel = UpdateChannel.STABLE;
+         info.devBuild = false;
++        info.redistWarningShown = true;
+         return info;
+     }
+ }
 diff --git a/src/main/java/net/minecraft/launcher/Launcher.java b/src/main/java/net/minecraft/launcher/Launcher.java
 index 905bb9e..d525bd1 100644
 --- a/src/main/java/net/minecraft/launcher/Launcher.java
@@ -71,5 +79,5 @@ index 905bb9e..d525bd1 100644
                      this.updateChecker.updateCheck();
                  } catch (IOException ex) {
 -- 
-2.54.0.windows.1
+2.50.1 (Apple Git-155)
 
