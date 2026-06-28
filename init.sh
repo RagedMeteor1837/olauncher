@@ -44,3 +44,30 @@ if [ ! -e "$vanilladir" ]; then
     init_component "bootstrap" $vanilla_bootstrap_dir
 
 fi
+
+if [ ! -e "$workdir/redist" ]; then
+  mkdir -pv "$workdir/redist"
+fi
+
+cd "$workdir/redist"
+
+# Building jbsdiff here because it is a requirement for the bootstrap
+if [ ! -e "jbsdiff" ]; then
+  echo jbsdiff not found! Downloading...
+
+  if ! git clone https://github.com/malensek/jbsdiff.git; then
+    echo "Error cloning jbsdiff repository"
+    exit 1
+  fi
+
+  pushd "jbsdiff"
+  git checkout 51b6981d97b4cf386069481707394f37c537b1d5
+  mvn clean install -Djdk.version=8
+  mvnresult="$?"
+  popd
+
+  if [ "$mvnresult" != "0" ]; then
+    echo "Error building jbsdiff"
+    exit 1
+  fi
+fi
