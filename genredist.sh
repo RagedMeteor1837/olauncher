@@ -90,4 +90,5 @@ if [ "$jarres" != "0" ]; then
 fi
 
 mv "$finalname" "$basedir/$finalname"
+mv "launcher.bsdiff" "$basedir/launcher.bsdiff"
 echo "Redistributable created with name $finalname"

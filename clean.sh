@@ -19,3 +19,4 @@
 rm -rf work
 rm -rf bootstrap bootstrap-olauncher launcher olauncher
 rm olauncher-*-redist.jar
+rm launcher.bsdiff
