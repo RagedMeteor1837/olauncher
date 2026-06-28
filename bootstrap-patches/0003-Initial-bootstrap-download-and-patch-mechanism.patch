@@ -1,0 +1,1488 @@
+From 4b081b08ffb481f789321bc8ef5ecdf053a3d911 Mon Sep 17 00:00:00 2001
+From: ExplodingBottle <72459125+ExplodingBottle@users.noreply.github.com>
+Date: Sun, 28 Jun 2026 16:36:41 +0200
+Subject: [PATCH] Initial bootstrap download and patch mechanism
+
+
+diff --git a/pom.xml b/pom.xml
+index 4bf75b3..6bfb307 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -1,92 +1,98 @@
+ <?xml version="1.0" encoding="UTF-8"?>
+ 
+-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+-    <modelVersion>4.0.0</modelVersion>
++<project xmlns="http://maven.apache.org/POM/4.0.0"
++	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
++	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
++	<modelVersion>4.0.0</modelVersion>
+ 
+-    <parent>
+-        <groupId>dev.figboot</groupId>
+-        <artifactId>olauncher-parent</artifactId>
+-        <version>0.1.1</version>
+-        <relativePath>../pom.xml</relativePath>
+-    </parent>
++	<parent>
++		<groupId>dev.figboot</groupId>
++		<artifactId>olauncher-parent</artifactId>
++		<version>0.1.1</version>
++		<relativePath>../pom.xml</relativePath>
++	</parent>
+ 
+-    <artifactId>bootstrap-olauncher</artifactId>
+-    <version>1.6.0</version>
++	<artifactId>bootstrap-olauncher</artifactId>
++	<version>1.6.0</version>
+ 
+-    <properties>
+-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+-    </properties>
++	<properties>
++		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
++	</properties>
+ 
+-    <build>
+-        <plugins>
+-            <plugin>
+-                <groupId>org.apache.maven.plugins</groupId>
+-                <artifactId>maven-compiler-plugin</artifactId>
+-                <version>3.15.0</version>
+-                <configuration>
+-                    <source>1.8</source>
+-                    <target>1.8</target>
+-                </configuration>
+-            </plugin>
+-            <plugin>
+-                <groupId>org.apache.maven.plugins</groupId>
+-                <artifactId>maven-jar-plugin</artifactId>
+-                <version>3.5.0</version>
+-                <configuration>
+-                    <archive>
+-                        <addMavenDescriptor>false</addMavenDescriptor>
+-                        <manifest>
+-                            <addClasspath>false</addClasspath>
+-                        </manifest>
+-                        <manifestEntries>
+-                            <Main-Class>net.minecraft.bootstrap.Bootstrap</Main-Class>
+-                            <Implementation-Version>${project.version}</Implementation-Version>
+-                            <Multi-Release>true</Multi-Release>
+-                        </manifestEntries>
+-                    </archive>
+-                </configuration>
+-            </plugin>
+-            <plugin>
+-                <groupId>org.apache.maven.plugins</groupId>
+-                <artifactId>maven-shade-plugin</artifactId>
+-                <version>3.6.2</version>
+-                <executions>
+-                    <execution>
+-                        <phase>package</phase>
+-                        <goals>
+-                            <goal>shade</goal>
+-                        </goals>
+-                    </execution>
+-                </executions>
+-                <configuration>
+-                    <minimizeJar>true</minimizeJar>
+-                    <createDependencyReducedPom>false</createDependencyReducedPom>
+-                </configuration>
+-               
+-            </plugin>
+-        </plugins>
+-    </build>
++	<build>
++		<plugins>
++			<plugin>
++				<groupId>org.apache.maven.plugins</groupId>
++				<artifactId>maven-compiler-plugin</artifactId>
++				<version>3.15.0</version>
++				<configuration>
++					<source>1.8</source>
++					<target>1.8</target>
++				</configuration>
++			</plugin>
++			<plugin>
++				<groupId>org.apache.maven.plugins</groupId>
++				<artifactId>maven-jar-plugin</artifactId>
++				<version>3.5.0</version>
++				<configuration>
++					<archive>
++						<addMavenDescriptor>false</addMavenDescriptor>
++						<manifest>
++							<addClasspath>false</addClasspath>
++						</manifest>
++						<manifestEntries>
++							<Main-Class>net.minecraft.bootstrap.Bootstrap</Main-Class>
++							<Implementation-Version>${project.version}</Implementation-Version>
++							<Multi-Release>true</Multi-Release>
++						</manifestEntries>
++					</archive>
++				</configuration>
++			</plugin>
++			<plugin>
++				<groupId>org.apache.maven.plugins</groupId>
++				<artifactId>maven-shade-plugin</artifactId>
++				<version>3.6.2</version>
++				<executions>
++					<execution>
++						<phase>package</phase>
++						<goals>
++							<goal>shade</goal>
++						</goals>
++					</execution>
++				</executions>
++				<configuration>
++					<minimizeJar>true</minimizeJar>
++					<createDependencyReducedPom>false</createDependencyReducedPom>
++				</configuration>
+ 
+-    <repositories>
+-        <repository>
+-            <id>central</id>
+-            <url>https://repo1.maven.org/maven2/</url>
+-        </repository>
+-    </repositories>
++			</plugin>
++		</plugins>
++	</build>
+ 
+-    <dependencies>
+-        <dependency>
+-            <groupId>com.google.code.gson</groupId>
+-            <artifactId>gson</artifactId>
+-            <version>2.14.0</version>
+-            <scope>compile</scope>
+-        </dependency>
+-        <dependency>
+-            <groupId>net.sf.jopt-simple</groupId>
+-            <artifactId>jopt-simple</artifactId>
+-            <version>5.0.4</version>
+-            <scope>compile</scope>
+-        </dependency>
+-    </dependencies>
++	<repositories>
++		<repository>
++			<id>central</id>
++			<url>https://repo1.maven.org/maven2/</url>
++		</repository>
++	</repositories>
++
++	<dependencies>
++		<dependency>
++			<groupId>net.sf.jopt-simple</groupId>
++			<artifactId>jopt-simple</artifactId>
++			<version>5.0.4</version>
++			<scope>compile</scope>
++		</dependency>
++		<dependency>
++			<groupId>com.google.code.gson</groupId>
++			<artifactId>gson</artifactId>
++			<version>2.14.0</version>
++		</dependency>
++		<dependency>
++			<!-- compiled from https://github.com/malensek/jbsdiff/tree/51b6981d97b4cf386069481707394f37c537b1d5 -->
++			<groupId>io.sigpipe</groupId>
++			<artifactId>jbsdiff</artifactId>
++			<version>1.0</version>
++		</dependency>
++	</dependencies>
+ </project>
+diff --git a/src/main/java/LZMA/CRangeDecoder.java b/src/main/java/LZMA/CRangeDecoder.java
+deleted file mode 100644
+index d2a67e5..0000000
+--- a/src/main/java/LZMA/CRangeDecoder.java
++++ /dev/null
+@@ -1,158 +0,0 @@
+-package LZMA;
+-
+-import java.io.IOException;
+-import java.io.InputStream;
+-
+-class CRangeDecoder {
+-    static final int kNumTopBits = 24;
+-    static final int kTopValue = 16777216;
+-    static final int kTopValueMask = -16777216;
+-    static final int kNumBitModelTotalBits = 11;
+-    static final int kBitModelTotal = 2048;
+-    static final int kNumMoveBits = 5;
+-    InputStream inStream;
+-    int Range;
+-    int Code;
+-    byte[] buffer = new byte[16384];
+-    int buffer_size;
+-    int buffer_ind;
+-    static final int kNumPosBitsMax = 4;
+-    static final int kNumPosStatesMax = 16;
+-    static final int kLenNumLowBits = 3;
+-    static final int kLenNumLowSymbols = 8;
+-    static final int kLenNumMidBits = 3;
+-    static final int kLenNumMidSymbols = 8;
+-    static final int kLenNumHighBits = 8;
+-    static final int kLenNumHighSymbols = 256;
+-    static final int LenChoice = 0;
+-    static final int LenChoice2 = 1;
+-    static final int LenLow = 2;
+-    static final int LenMid = 130;
+-    static final int LenHigh = 258;
+-    static final int kNumLenProbs = 514;
+-
+-    CRangeDecoder(InputStream var1) throws IOException {
+-        this.inStream = var1;
+-        this.Code = 0;
+-        this.Range = -1;
+-
+-        for(int var2 = 0; var2 < 5; ++var2) {
+-            this.Code = this.Code << 8 | this.Readbyte();
+-        }
+-
+-    }
+-
+-    int Readbyte() throws IOException {
+-        if (this.buffer_size == this.buffer_ind) {
+-            this.buffer_size = this.inStream.read(this.buffer);
+-            this.buffer_ind = 0;
+-            if (this.buffer_size < 1) {
+-                throw new LzmaException("LZMA : Data Error");
+-            }
+-        }
+-
+-        return this.buffer[this.buffer_ind++] & 255;
+-    }
+-
+-    int DecodeDirectBits(int var1) throws IOException {
+-        int var2 = 0;
+-
+-        for(int var3 = var1; var3 > 0; --var3) {
+-            this.Range >>>= 1;
+-            int var4 = this.Code - this.Range >>> 31;
+-            this.Code -= this.Range & var4 - 1;
+-            var2 = var2 << 1 | 1 - var4;
+-            if (this.Range < 16777216) {
+-                this.Code = this.Code << 8 | this.Readbyte();
+-                this.Range <<= 8;
+-            }
+-        }
+-
+-        return var2;
+-    }
+-
+-    int BitDecode(int[] var1, int var2) throws IOException {
+-        int var3 = (this.Range >>> 11) * var1[var2];
+-        if (((long)this.Code & 4294967295L) < ((long)var3 & 4294967295L)) {
+-            this.Range = var3;
+-            var1[var2] += 2048 - var1[var2] >>> 5;
+-            if ((this.Range & -16777216) == 0) {
+-                this.Code = this.Code << 8 | this.Readbyte();
+-                this.Range <<= 8;
+-            }
+-
+-            return 0;
+-        } else {
+-            this.Range -= var3;
+-            this.Code -= var3;
+-            var1[var2] -= var1[var2] >>> 5;
+-            if ((this.Range & -16777216) == 0) {
+-                this.Code = this.Code << 8 | this.Readbyte();
+-                this.Range <<= 8;
+-            }
+-
+-            return 1;
+-        }
+-    }
+-
+-    int BitTreeDecode(int[] var1, int var2, int var3) throws IOException {
+-        int var4 = 1;
+-
+-        for(int var5 = var3; var5 > 0; --var5) {
+-            var4 = var4 + var4 + this.BitDecode(var1, var2 + var4);
+-        }
+-
+-        return var4 - (1 << var3);
+-    }
+-
+-    int ReverseBitTreeDecode(int[] var1, int var2, int var3) throws IOException {
+-        int var4 = 1;
+-        int var5 = 0;
+-
+-        for(int var6 = 0; var6 < var3; ++var6) {
+-            int var7 = this.BitDecode(var1, var2 + var4);
+-            var4 = var4 + var4 + var7;
+-            var5 |= var7 << var6;
+-        }
+-
+-        return var5;
+-    }
+-
+-    byte LzmaLiteralDecode(int[] var1, int var2) throws IOException {
+-        int var3 = 1;
+-
+-        do {
+-            var3 = var3 + var3 | this.BitDecode(var1, var2 + var3);
+-        } while(var3 < 256);
+-
+-        return (byte)var3;
+-    }
+-
+-    byte LzmaLiteralDecodeMatch(int[] var1, int var2, byte var3) throws IOException {
+-        int var4 = 1;
+-
+-        do {
+-            int var5 = var3 >> 7 & 1;
+-            var3 = (byte)(var3 << 1);
+-            int var6 = this.BitDecode(var1, var2 + (1 + var5 << 8) + var4);
+-            var4 = var4 << 1 | var6;
+-            if (var5 != var6) {
+-                while(var4 < 256) {
+-                    var4 = var4 + var4 | this.BitDecode(var1, var2 + var4);
+-                }
+-
+-                return (byte)var4;
+-            }
+-        } while(var4 < 256);
+-
+-        return (byte)var4;
+-    }
+-
+-    int LzmaLenDecode(int[] var1, int var2, int var3) throws IOException {
+-        if (this.BitDecode(var1, var2 + 0) == 0) {
+-            return this.BitTreeDecode(var1, var2 + 2 + (var3 << 3), 3);
+-        } else {
+-            return this.BitDecode(var1, var2 + 1) == 0 ? 8 + this.BitTreeDecode(var1, var2 + 130 + (var3 << 3), 3) : 16 + this.BitTreeDecode(var1, var2 + 258, 8);
+-        }
+-    }
+-}
+diff --git a/src/main/java/LZMA/LzmaException.java b/src/main/java/LZMA/LzmaException.java
+deleted file mode 100644
+index cc682c1..0000000
+--- a/src/main/java/LZMA/LzmaException.java
++++ /dev/null
+@@ -1,14 +0,0 @@
+-package LZMA;
+-
+-import java.io.IOException;
+-
+-public class LzmaException extends IOException {
+-    private static final long serialVersionUID = 3689351022372206390L;
+-
+-    public LzmaException() {
+-    }
+-
+-    public LzmaException(String var1) {
+-        super(var1);
+-    }
+-}
+diff --git a/src/main/java/LZMA/LzmaInputStream.java b/src/main/java/LZMA/LzmaInputStream.java
+deleted file mode 100644
+index a41a7a6..0000000
+--- a/src/main/java/LZMA/LzmaInputStream.java
++++ /dev/null
+@@ -1,340 +0,0 @@
+-package LZMA;
+-
+-import java.io.FilterInputStream;
+-import java.io.IOException;
+-import java.io.InputStream;
+-
+-public class LzmaInputStream extends FilterInputStream {
+-    boolean isClosed = false;
+-    CRangeDecoder RangeDecoder;
+-    byte[] dictionary;
+-    int dictionarySize;
+-    int dictionaryPos;
+-    int GlobalPos;
+-    int rep0;
+-    int rep1;
+-    int rep2;
+-    int rep3;
+-    int lc;
+-    int lp;
+-    int pb;
+-    int State;
+-    boolean PreviousIsMatch;
+-    int RemainLen;
+-    int[] probs;
+-    byte[] uncompressed_buffer;
+-    int uncompressed_size;
+-    int uncompressed_offset;
+-    long GlobalNowPos;
+-    long GlobalOutSize;
+-    static final int LZMA_BASE_SIZE = 1846;
+-    static final int LZMA_LIT_SIZE = 768;
+-    static final int kBlockSize = 65536;
+-    static final int kNumStates = 12;
+-    static final int kStartPosModelIndex = 4;
+-    static final int kEndPosModelIndex = 14;
+-    static final int kNumFullDistances = 128;
+-    static final int kNumPosSlotBits = 6;
+-    static final int kNumLenToPosStates = 4;
+-    static final int kNumAlignBits = 4;
+-    static final int kAlignTableSize = 16;
+-    static final int kMatchMinLen = 2;
+-    static final int IsMatch = 0;
+-    static final int IsRep = 192;
+-    static final int IsRepG0 = 204;
+-    static final int IsRepG1 = 216;
+-    static final int IsRepG2 = 228;
+-    static final int IsRep0Long = 240;
+-    static final int PosSlot = 432;
+-    static final int SpecPos = 688;
+-    static final int Align = 802;
+-    static final int LenCoder = 818;
+-    static final int RepLenCoder = 1332;
+-    static final int Literal = 1846;
+-
+-    public LzmaInputStream(InputStream var1) throws IOException {
+-        super(var1);
+-        this.readHeader();
+-        this.fill_buffer();
+-    }
+-
+-    private void LzmaDecode(int var1) throws IOException {
+-        int var3 = (1 << this.pb) - 1;
+-        int var4 = (1 << this.lp) - 1;
+-        this.uncompressed_size = 0;
+-        if (this.RemainLen != -1) {
+-            int var5;
+-            for(; this.RemainLen > 0 && this.uncompressed_size < var1; --this.RemainLen) {
+-                var5 = this.dictionaryPos - this.rep0;
+-                if (var5 < 0) {
+-                    var5 += this.dictionarySize;
+-                }
+-
+-                this.uncompressed_buffer[this.uncompressed_size++] = this.dictionary[this.dictionaryPos] = this.dictionary[var5];
+-                if (++this.dictionaryPos == this.dictionarySize) {
+-                    this.dictionaryPos = 0;
+-                }
+-            }
+-
+-            byte var2;
+-            if (this.dictionaryPos == 0) {
+-                var2 = this.dictionary[this.dictionarySize - 1];
+-            } else {
+-                var2 = this.dictionary[this.dictionaryPos - 1];
+-            }
+-
+-            while(this.uncompressed_size < var1) {
+-                var5 = this.uncompressed_size + this.GlobalPos & var3;
+-                int var6;
+-                int var7;
+-                if (this.RangeDecoder.BitDecode(this.probs, 0 + (this.State << 4) + var5) == 0) {
+-                    var6 = 1846 + 768 * (((this.uncompressed_size + this.GlobalPos & var4) << this.lc) + ((var2 & 255) >> 8 - this.lc));
+-                    if (this.State < 4) {
+-                        this.State = 0;
+-                    } else if (this.State < 10) {
+-                        this.State -= 3;
+-                    } else {
+-                        this.State -= 6;
+-                    }
+-
+-                    if (this.PreviousIsMatch) {
+-                        var7 = this.dictionaryPos - this.rep0;
+-                        if (var7 < 0) {
+-                            var7 += this.dictionarySize;
+-                        }
+-
+-                        byte var8 = this.dictionary[var7];
+-                        var2 = this.RangeDecoder.LzmaLiteralDecodeMatch(this.probs, var6, var8);
+-                        this.PreviousIsMatch = false;
+-                    } else {
+-                        var2 = this.RangeDecoder.LzmaLiteralDecode(this.probs, var6);
+-                    }
+-
+-                    this.uncompressed_buffer[this.uncompressed_size++] = var2;
+-                    this.dictionary[this.dictionaryPos] = var2;
+-                    if (++this.dictionaryPos == this.dictionarySize) {
+-                        this.dictionaryPos = 0;
+-                    }
+-                } else {
+-                    this.PreviousIsMatch = true;
+-                    if (this.RangeDecoder.BitDecode(this.probs, 192 + this.State) == 1) {
+-                        if (this.RangeDecoder.BitDecode(this.probs, 204 + this.State) == 0) {
+-                            if (this.RangeDecoder.BitDecode(this.probs, 240 + (this.State << 4) + var5) == 0) {
+-                                if (this.uncompressed_size + this.GlobalPos == 0) {
+-                                    throw new LzmaException("LZMA : Data Error");
+-                                }
+-
+-                                this.State = this.State < 7 ? 9 : 11;
+-                                var6 = this.dictionaryPos - this.rep0;
+-                                if (var6 < 0) {
+-                                    var6 += this.dictionarySize;
+-                                }
+-
+-                                var2 = this.dictionary[var6];
+-                                this.dictionary[this.dictionaryPos] = var2;
+-                                if (++this.dictionaryPos == this.dictionarySize) {
+-                                    this.dictionaryPos = 0;
+-                                }
+-
+-                                this.uncompressed_buffer[this.uncompressed_size++] = var2;
+-                                continue;
+-                            }
+-                        } else {
+-                            if (this.RangeDecoder.BitDecode(this.probs, 216 + this.State) == 0) {
+-                                var6 = this.rep1;
+-                            } else {
+-                                if (this.RangeDecoder.BitDecode(this.probs, 228 + this.State) == 0) {
+-                                    var6 = this.rep2;
+-                                } else {
+-                                    var6 = this.rep3;
+-                                    this.rep3 = this.rep2;
+-                                }
+-
+-                                this.rep2 = this.rep1;
+-                            }
+-
+-                            this.rep1 = this.rep0;
+-                            this.rep0 = var6;
+-                        }
+-
+-                        this.RemainLen = this.RangeDecoder.LzmaLenDecode(this.probs, 1332, var5);
+-                        this.State = this.State < 7 ? 8 : 11;
+-                    } else {
+-                        this.rep3 = this.rep2;
+-                        this.rep2 = this.rep1;
+-                        this.rep1 = this.rep0;
+-                        this.State = this.State < 7 ? 7 : 10;
+-                        this.RemainLen = this.RangeDecoder.LzmaLenDecode(this.probs, 818, var5);
+-                        var6 = this.RangeDecoder.BitTreeDecode(this.probs, 432 + ((this.RemainLen < 4 ? this.RemainLen : 3) << 6), 6);
+-                        if (var6 >= 4) {
+-                            var7 = (var6 >> 1) - 1;
+-                            this.rep0 = (2 | var6 & 1) << var7;
+-                            if (var6 < 14) {
+-                                this.rep0 += this.RangeDecoder.ReverseBitTreeDecode(this.probs, 688 + this.rep0 - var6 - 1, var7);
+-                            } else {
+-                                this.rep0 += this.RangeDecoder.DecodeDirectBits(var7 - 4) << 4;
+-                                this.rep0 += this.RangeDecoder.ReverseBitTreeDecode(this.probs, 802, 4);
+-                            }
+-                        } else {
+-                            this.rep0 = var6;
+-                        }
+-
+-                        ++this.rep0;
+-                    }
+-
+-                    if (this.rep0 == 0) {
+-                        this.RemainLen = -1;
+-                        break;
+-                    }
+-
+-                    if (this.rep0 > this.uncompressed_size + this.GlobalPos) {
+-                        throw new LzmaException("LZMA : Data Error");
+-                    }
+-
+-                    this.RemainLen += 2;
+-
+-                    while(true) {
+-                        var6 = this.dictionaryPos - this.rep0;
+-                        if (var6 < 0) {
+-                            var6 += this.dictionarySize;
+-                        }
+-
+-                        var2 = this.dictionary[var6];
+-                        this.dictionary[this.dictionaryPos] = var2;
+-                        if (++this.dictionaryPos == this.dictionarySize) {
+-                            this.dictionaryPos = 0;
+-                        }
+-
+-                        this.uncompressed_buffer[this.uncompressed_size++] = var2;
+-                        --this.RemainLen;
+-                        if (this.RemainLen <= 0 || this.uncompressed_size >= var1) {
+-                            break;
+-                        }
+-                    }
+-                }
+-            }
+-
+-            this.GlobalPos += this.uncompressed_size;
+-        }
+-    }
+-
+-    private void fill_buffer() throws IOException {
+-        if (this.GlobalNowPos < this.GlobalOutSize) {
+-            this.uncompressed_offset = 0;
+-            long var1 = this.GlobalOutSize - this.GlobalNowPos;
+-            int var3;
+-            if (var1 > 65536L) {
+-                var3 = 65536;
+-            } else {
+-                var3 = (int)var1;
+-            }
+-
+-            this.LzmaDecode(var3);
+-            if (this.uncompressed_size == 0) {
+-                this.GlobalOutSize = this.GlobalNowPos;
+-            } else {
+-                this.GlobalNowPos += (long)this.uncompressed_size;
+-            }
+-        }
+-
+-    }
+-
+-    private void readHeader() throws IOException {
+-        byte[] var1 = new byte[5];
+-        if (5 != this.in.read(var1)) {
+-            throw new LzmaException("LZMA header corrupted : Properties error");
+-        } else {
+-            this.GlobalOutSize = 0L;
+-
+-            int var2;
+-            int var3;
+-            for(var2 = 0; var2 < 8; ++var2) {
+-                var3 = this.in.read();
+-                if (var3 == -1) {
+-                    throw new LzmaException("LZMA header corrupted : Size error");
+-                }
+-
+-                this.GlobalOutSize += (long)var3 << var2 * 8;
+-            }
+-
+-            if (this.GlobalOutSize == -1L) {
+-                this.GlobalOutSize = Long.MAX_VALUE;
+-            }
+-
+-            var2 = var1[0] & 255;
+-            if (var2 >= 225) {
+-                throw new LzmaException("LZMA header corrupted : Properties error");
+-            } else {
+-                for(this.pb = 0; var2 >= 45; var2 -= 45) {
+-                    ++this.pb;
+-                }
+-
+-                for(this.lp = 0; var2 >= 9; var2 -= 9) {
+-                    ++this.lp;
+-                }
+-
+-                this.lc = var2;
+-                var3 = 1846 + (768 << this.lc + this.lp);
+-                this.probs = new int[var3];
+-                this.dictionarySize = 0;
+-
+-                int var4;
+-                for(var4 = 0; var4 < 4; ++var4) {
+-                    this.dictionarySize += (var1[1 + var4] & 255) << var4 * 8;
+-                }
+-
+-                this.dictionary = new byte[this.dictionarySize];
+-                if (this.dictionary == null) {
+-                    throw new LzmaException("LZMA : can't allocate");
+-                } else {
+-                    var4 = 1846 + (768 << this.lc + this.lp);
+-                    this.RangeDecoder = new CRangeDecoder(this.in);
+-                    this.dictionaryPos = 0;
+-                    this.GlobalPos = 0;
+-                    this.rep0 = this.rep1 = this.rep2 = this.rep3 = 1;
+-                    this.State = 0;
+-                    this.PreviousIsMatch = false;
+-                    this.RemainLen = 0;
+-                    this.dictionary[this.dictionarySize - 1] = 0;
+-
+-                    for(int var5 = 0; var5 < var4; ++var5) {
+-                        this.probs[var5] = 1024;
+-                    }
+-
+-                    this.uncompressed_buffer = new byte[65536];
+-                    this.uncompressed_size = 0;
+-                    this.uncompressed_offset = 0;
+-                    this.GlobalNowPos = 0L;
+-                }
+-            }
+-        }
+-    }
+-
+-    public int read(byte[] var1, int var2, int var3) throws IOException {
+-        if (this.isClosed) {
+-            throw new IOException("stream closed");
+-        } else if ((var2 | var3 | var2 + var3 | var1.length - (var2 + var3)) < 0) {
+-            throw new IndexOutOfBoundsException();
+-        } else if (var3 == 0) {
+-            return 0;
+-        } else {
+-            if (this.uncompressed_offset == this.uncompressed_size) {
+-                this.fill_buffer();
+-            }
+-
+-            if (this.uncompressed_offset == this.uncompressed_size) {
+-                return -1;
+-            } else {
+-                int var4 = Math.min(var3, this.uncompressed_size - this.uncompressed_offset);
+-                System.arraycopy(this.uncompressed_buffer, this.uncompressed_offset, var1, var2, var4);
+-                this.uncompressed_offset += var4;
+-                return var4;
+-            }
+-        }
+-    }
+-
+-    public void close() throws IOException {
+-        this.isClosed = true;
+-        super.close();
+-    }
+-}
+diff --git a/src/main/java/net/minecraft/bootstrap/AssetsList.java b/src/main/java/net/minecraft/bootstrap/AssetsList.java
+new file mode 100644
+index 0000000..8e2c609
+--- /dev/null
++++ b/src/main/java/net/minecraft/bootstrap/AssetsList.java
+@@ -0,0 +1,36 @@
++package net.minecraft.bootstrap;
++
++import java.util.List;
++
++public class AssetsList {
++
++	public class Asset {
++		private String digest;
++		private String name;
++		private String browser_download_url;
++		private String content_type;
++
++		public String getAssetDigest() {
++			return digest;
++		}
++
++		public String getAssetName() {
++			return name;
++		}
++
++		public String getDownloadUrl() {
++			return browser_download_url;
++		}
++
++		public String getContentType() {
++			return content_type;
++		}
++	}
++
++	List<Asset> assets;
++
++	public List<Asset> getAssets() {
++		return assets;
++	}
++
++}
+diff --git a/src/main/java/net/minecraft/bootstrap/Bootstrap.java b/src/main/java/net/minecraft/bootstrap/Bootstrap.java
+index 6d94b33..c9fda87 100644
+--- a/src/main/java/net/minecraft/bootstrap/Bootstrap.java
++++ b/src/main/java/net/minecraft/bootstrap/Bootstrap.java
+@@ -1,6 +1,5 @@
+ package net.minecraft.bootstrap;
+ 
+-import LZMA.LzmaInputStream;
+ import java.awt.Component;
+ import java.awt.Font;
+ import java.io.ByteArrayOutputStream;
+@@ -18,7 +17,6 @@ import java.net.PasswordAuthentication;
+ import java.net.Proxy;
+ import java.net.URL;
+ import java.net.URLClassLoader;
+-import java.net.Proxy.Type;
+ import java.nio.channels.FileChannel;
+ import java.security.DigestInputStream;
+ import java.security.MessageDigest;
+@@ -27,8 +25,7 @@ import java.util.Date;
+ import java.util.List;
+ import java.util.Locale;
+ import java.util.concurrent.TimeUnit;
+-import java.util.jar.JarOutputStream;
+-import java.util.jar.Pack200;
++
+ import javax.swing.JFrame;
+ import javax.swing.JScrollBar;
+ import javax.swing.JScrollPane;
+@@ -39,6 +36,11 @@ import javax.swing.text.AttributeSet;
+ import javax.swing.text.BadLocationException;
+ import javax.swing.text.DefaultCaret;
+ import javax.swing.text.Document;
++
++import org.apache.commons.compress.compressors.CompressorException;
++
++import io.sigpipe.jbsdiff.InvalidHeaderException;
++import io.sigpipe.jbsdiff.Patch;
+ import joptsimple.ArgumentAcceptingOptionSpec;
+ import joptsimple.NonOptionArgumentSpec;
+ import joptsimple.OptionException;
+@@ -47,13 +49,21 @@ import joptsimple.OptionSet;
+ import net.minecraft.hopper.HopperService;
+ 
+ public class Bootstrap extends JFrame {
+-    private static final Font MONOSPACED = new Font("Monospaced", 0, 12);
+-    public static final String LAUNCHER_URL = "https://s3.amazonaws.com/Minecraft.Download/launcher/launcher.pack.lzma";
++    private static final long serialVersionUID = 1L;
++
++	private static final Font MONOSPACED = new Font("Monospaced", 0, 12);
++    
++    public static final String VANILLA_LAUNCHER_HASH = "eabbff5ff8e21250e33670924a0c5e38f47c840b";
++    public static final String LATEST_RELEASE_URL = "https://api.github.com/repos/ExplodingBottle/olauncher/releases/latest";
++    
+     private final File workDir;
+     private final Proxy proxy;
+     private final File launcherJar;
+-    private final File packedLauncherJar;
+-    private final File packedLauncherJarNew;
++    private final File bsdiffLauncherPatch;
++    private final File bsdiffLauncherPatchNew;
++    private final File launcherJarOrig;
++    private final File launcherJarOrigNew;
++    
+     private final JTextArea textArea;
+     private final JScrollPane scrollPane;
+     private final PasswordAuthentication proxyAuth;
+@@ -66,9 +76,12 @@ public class Bootstrap extends JFrame {
+         this.proxy = var2;
+         this.proxyAuth = var3;
+         this.remainderArgs = var4;
++        // olauncher - add references to the additional required files
+         this.launcherJar = new File(var1, "launcher.jar");
+-        this.packedLauncherJar = new File(var1, "launcher.pack.lzma");
+-        this.packedLauncherJarNew = new File(var1, "launcher.pack.lzma.new");
++        this.bsdiffLauncherPatch = new File(var1, "launcher.bsdiff");
++        this.bsdiffLauncherPatchNew = new File(var1, "launcher.bsdiff.new");
++        this.launcherJarOrig = new File(var1, "launcher.orig");
++        this.launcherJarOrigNew = new File(var1, "launcher.orig.new");
+         this.setSize(854, 480);
+         this.setDefaultCloseOperation(3);
+         this.textArea = new JTextArea();
+@@ -82,7 +95,7 @@ public class Bootstrap extends JFrame {
+         this.add(this.scrollPane);
+         this.setLocationRelativeTo((Component)null);
+         this.setVisible(true);
+-        this.println("Bootstrap (v5)");
++        this.println("Bootstrap (v" + BootstrapConstants.BOOTSTRAP_VERSION_NUMBER + ")");
+         this.println("Current time is " + DateFormat.getDateTimeInstance(2, 2, Locale.US).format(new Date()));
+         this.println("System.getProperty('os.name') == '" + System.getProperty("os.name") + "'");
+         this.println("System.getProperty('os.version') == '" + System.getProperty("os.version") + "'");
+@@ -93,16 +106,25 @@ public class Bootstrap extends JFrame {
+         this.println("");
+     }
+ 
+-    public void execute(boolean var1) {
+-        if (this.packedLauncherJarNew.isFile()) {
++    public void execute(boolean force) {
++    	// olauncher - reworked bootstrap execute flow to support multiple files and patching
++        if (launcherJarOrigNew.isFile() || bsdiffLauncherPatchNew.isFile()) {
+             this.println("Found cached update");
+             this.renameNew();
+         }
+ 
+         Downloader.Controller var2 = new Downloader.Controller();
+-        if (!var1 && this.packedLauncherJar.exists()) {
+-            String var7 = this.getMd5(this.packedLauncherJar);
+-            Thread var4 = new Thread(new Downloader(var2, this, this.proxy, var7, this.packedLauncherJarNew));
++        
++        /* The logic here is the same as the one from the original bootstrap,
++         * but adapted for two files so if you already have one,
++         * it won't be downloaded twice, but it will still fail if the other file
++         * couldn't be downloaded
++         */
++    	String launcherJarDigest = getDigest(launcherJarOrig, true);
++    	String patchDigest = getDigest(bsdiffLauncherPatch, false);
++        if (!force && launcherJarOrig.exists() && bsdiffLauncherPatch.exists()) {
++        	
++            Thread var4 = new Thread(new Downloader(var2, this, this.proxy, patchDigest, bsdiffLauncherPatchNew, launcherJarDigest, launcherJarOrigNew));
+             var4.setName("Launcher downloader");
+             var4.start();
+ 
+@@ -120,7 +142,11 @@ public class Bootstrap extends JFrame {
+                 throw new FatalBootstrapError("Got interrupted: " + var6.toString());
+             }
+         } else {
+-            Downloader var3 = new Downloader(var2, this, this.proxy, (String)null, this.packedLauncherJarNew);
++        	if (force) {
++        		launcherJarDigest = null;
++        		patchDigest = null;
++        	}
++            Downloader var3 = new Downloader(var2, this, this.proxy, patchDigest, bsdiffLauncherPatchNew, launcherJarDigest, launcherJarOrigNew);
+             var3.run();
+             if (var2.hasDownloadedLatch.getCount() != 0L) {
+                 throw new FatalBootstrapError("Unable to download while being forced");
+@@ -128,46 +154,23 @@ public class Bootstrap extends JFrame {
+ 
+             this.renameNew();
+         }
+-
+-        this.unpack();
++        /* This is the same workflow as the original bootstrap, even if we could
++         * not patch it each time, the original bootstrap did extract it each time
++         */
++        this.patch();
+         this.startLauncher(this.launcherJar);
+     }
+ 
+-    public void unpack() {
+-        File var1 = this.getUnpackedLzmaFile(this.packedLauncherJar);
+-        LzmaInputStream var2 = null;
+-        FileOutputStream var3 = null;
+-        this.println("Reversing LZMA on " + this.packedLauncherJar + " to " + var1);
+-
++    public void patch() {
++    	// olauncher - patch the launcher instead of unpacking it
++        println("Launcher patch location is " + bsdiffLauncherPatch);
++        println("Applying patch on " + launcherJarOrig + " to " + launcherJar);
++        
+         try {
+-            var2 = new LzmaInputStream(new FileInputStream(this.packedLauncherJar));
+-            var3 = new FileOutputStream(var1);
+-            byte[] var4 = new byte[65536];
+-
+-            for(int var5 = var2.read(var4); var5 >= 1; var5 = var2.read(var4)) {
+-                var3.write(var4, 0, var5);
+-            }
+-        } catch (Exception var18) {
+-            throw new FatalBootstrapError("Unable to un-lzma: " + var18);
+-        } finally {
+-            closeSilently(var2);
+-            closeSilently(var3);
++        	Patch.patch(launcherJarOrig, launcherJar, bsdiffLauncherPatch);
++        } catch (CompressorException | InvalidHeaderException | IOException e) {
++        	throw new FatalBootstrapError("Unable to patch launcher: " + e);
+         }
+-
+-        this.println("Unpacking " + var1 + " to " + this.launcherJar);
+-        JarOutputStream var20 = null;
+-
+-        try {
+-            var20 = new JarOutputStream(new FileOutputStream(this.launcherJar));
+-            Pack200.newUnpacker().unpack(var1, var20);
+-        } catch (Exception var16) {
+-            throw new FatalBootstrapError("Unable to un-pack200: " + var16);
+-        } finally {
+-            closeSilently(var20);
+-        }
+-
+-        this.println("Cleaning up " + var1);
+-        var1.delete();
+     }
+ 
+     public static void closeSilently(Closeable var0) {
+@@ -180,27 +183,18 @@ public class Bootstrap extends JFrame {
+ 
+     }
+ 
+-    private File getUnpackedLzmaFile(File var1) {
+-        String var2 = var1.getAbsolutePath();
+-        if (var2.endsWith(".lzma")) {
+-            var2 = var2.substring(0, var2.length() - 5);
+-        }
+-
+-        return new File(var2);
+-    }
+-
+-    public String getMd5(File var1) {
++    public String getDigest(File var1, boolean usingSHA1) {
+         DigestInputStream var2 = null;
+ 
+         Object var4;
+         try {
+-            var2 = new DigestInputStream(new FileInputStream(var1), MessageDigest.getInstance("MD5"));
++            var2 = new DigestInputStream(new FileInputStream(var1), MessageDigest.getInstance(usingSHA1 ? "SHA-1" : "SHA-256"));
+             byte[] var3 = new byte[65536];
+ 
+             for(int var10 = var2.read(var3); var10 >= 1; var10 = var2.read(var3)) {
+             }
+ 
+-            return String.format("%1$032x", new BigInteger(1, var2.getMessageDigest().digest()));
++            return String.format(usingSHA1 ? "%1$032x" : "%1$064x", new BigInteger(1, var2.getMessageDigest().digest()));
+         } catch (Exception var8) {
+             var4 = null;
+         } finally {
+@@ -242,33 +236,33 @@ public class Bootstrap extends JFrame {
+         try {
+             Class var2 = (new URLClassLoader(new URL[]{var1.toURI().toURL()})).loadClass("net.minecraft.launcher.Launcher");
+             Constructor var3 = var2.getConstructor(JFrame.class, File.class, Proxy.class, PasswordAuthentication.class, String[].class, Integer.class);
+-            var3.newInstance(this, this.workDir, this.proxy, this.proxyAuth, this.remainderArgs, 5);
++            var3.newInstance(this, this.workDir, this.proxy, this.proxyAuth, this.remainderArgs, BootstrapConstants.BOOTSTRAP_VERSION_NUMBER);
+         } catch (Exception var4) {
+             throw new FatalBootstrapError("Unable to start: " + var4);
+         }
+     }
+-
+-    public void renameNew() {
+-        if (this.packedLauncherJar.exists() && !this.packedLauncherJar.isFile() && !this.packedLauncherJar.delete()) {
+-            throw new FatalBootstrapError("while renaming, target path: " + this.packedLauncherJar.getAbsolutePath() + " is not a file and we failed to delete it");
++    
++    public void rename(File newExtensionFile, File targetFile) {
++    	if (targetFile.exists() && !targetFile.isFile() && !targetFile.delete()) {
++            throw new FatalBootstrapError("while renaming, target path: " + targetFile.getAbsolutePath() + " is not a file and we failed to delete it");
+         } else {
+-            if (this.packedLauncherJarNew.isFile()) {
+-                this.println("Renaming " + this.packedLauncherJarNew.getAbsolutePath() + " to " + this.packedLauncherJar.getAbsolutePath());
+-                if (this.packedLauncherJarNew.renameTo(this.packedLauncherJar)) {
++            if (newExtensionFile.isFile()) {
++                this.println("Renaming " + newExtensionFile.getAbsolutePath() + " to " + targetFile.getAbsolutePath());
++                if (newExtensionFile.renameTo(targetFile)) {
+                     this.println("Renamed successfully.");
+                 } else {
+-                    if (this.packedLauncherJar.exists() && !this.packedLauncherJar.canWrite()) {
+-                        throw new FatalBootstrapError("unable to rename: target" + this.packedLauncherJar.getAbsolutePath() + " not writable");
++                    if (targetFile.exists() && !targetFile.canWrite()) {
++                        throw new FatalBootstrapError("unable to rename: target" + targetFile.getAbsolutePath() + " not writable");
+                     }
+ 
+                     this.println("Unable to rename - could be on another filesystem, trying copy & delete.");
+-                    if (this.packedLauncherJarNew.exists() && this.packedLauncherJarNew.isFile()) {
++                    if (newExtensionFile.exists() && newExtensionFile.isFile()) {
+                         try {
+-                            copyFile(this.packedLauncherJarNew, this.packedLauncherJar);
+-                            if (this.packedLauncherJarNew.delete()) {
++                            copyFile(newExtensionFile, targetFile);
++                            if (newExtensionFile.delete()) {
+                                 this.println("Copy & delete succeeded.");
+                             } else {
+-                                this.println("Unable to remove " + this.packedLauncherJarNew.getAbsolutePath() + " after copy.");
++                                this.println("Unable to remove " + newExtensionFile.getAbsolutePath() + " after copy.");
+                             }
+                         } catch (IOException var2) {
+                             throw new FatalBootstrapError("unable to copy:" + var2);
+@@ -282,6 +276,12 @@ public class Bootstrap extends JFrame {
+         }
+     }
+ 
++    public void renameNew() {
++    	// olauncher - support renaming multiple files
++        rename(launcherJarOrigNew, launcherJarOrig);
++        rename(bsdiffLauncherPatchNew, bsdiffLauncherPatch);
++    }
++
+     public static void copyFile(File var0, File var1) throws IOException {
+         if (!var1.exists()) {
+             var1.createNewFile();
+@@ -336,7 +336,7 @@ public class Bootstrap extends JFrame {
+             Proxy var10 = Proxy.NO_PROXY;
+             if (var9 != null) {
+                 try {
+-                    var10 = new Proxy(java.net.Proxy.Type.SOCKS, new InetSocketAddress(var9, (Integer)var8.valueOf(var3)));
++                    var10 = new Proxy(Proxy.Type.HTTP, new InetSocketAddress(var9, (Integer)var8.valueOf(var3)));
+                 } catch (Exception var25) {
+                 }
+             }
+@@ -372,10 +372,10 @@ public class Bootstrap extends JFrame {
+                     var24.printStackTrace(new PrintStream(var20));
+                     StringBuilder var21 = new StringBuilder();
+                     var21.append(var20).append("\n\n-- Head --\nStacktrace:\n").append(var20).append("\n\n").append(var18.outputBuffer);
+-                    var21.append("\tMinecraft.Bootstrap Version: 5");
++                    var21.append("\tMinecraft.Bootstrap Version: " + BootstrapConstants.BOOTSTRAP_VERSION_NUMBER);
+ 
+                     try {
+-                        HopperService.submitReport(var10, var21.toString(), "Minecraft.Bootstrap", "5");
++                        HopperService.submitReport(var10, var21.toString(), "Minecraft.Bootstrap", "" + BootstrapConstants.BOOTSTRAP_VERSION_NUMBER);
+                     } catch (Throwable var23) {
+                     }
+ 
+diff --git a/src/main/java/net/minecraft/bootstrap/BootstrapConstants.java b/src/main/java/net/minecraft/bootstrap/BootstrapConstants.java
+index 264778c..45af2cd 100644
+--- a/src/main/java/net/minecraft/bootstrap/BootstrapConstants.java
++++ b/src/main/java/net/minecraft/bootstrap/BootstrapConstants.java
+@@ -1,7 +1,7 @@
+ package net.minecraft.bootstrap;
+ 
+ public class BootstrapConstants {
+-    public static final int BOOTSTRAP_VERSION_NUMBER = 5;
++    public static final int BOOTSTRAP_VERSION_NUMBER = 6; // olauncher - new bootstrap version here
+ 
+     public BootstrapConstants() {
+     }
+diff --git a/src/main/java/net/minecraft/bootstrap/Downloader.java b/src/main/java/net/minecraft/bootstrap/Downloader.java
+index 6498cbf..fa2f178 100644
+--- a/src/main/java/net/minecraft/bootstrap/Downloader.java
++++ b/src/main/java/net/minecraft/bootstrap/Downloader.java
+@@ -1,9 +1,11 @@
+ package net.minecraft.bootstrap;
+ 
++import java.io.BufferedInputStream;
++import java.io.BufferedOutputStream;
+ import java.io.File;
+ import java.io.FileOutputStream;
+ import java.io.IOException;
+-import java.io.InputStream;
++import java.io.InputStreamReader;
+ import java.math.BigInteger;
+ import java.net.BindException;
+ import java.net.Proxy;
+@@ -11,134 +13,229 @@ import java.net.URL;
+ import java.security.MessageDigest;
+ import java.util.concurrent.CountDownLatch;
+ import java.util.concurrent.atomic.AtomicBoolean;
++
+ import javax.net.ssl.HttpsURLConnection;
+ import javax.net.ssl.SSLHandshakeException;
+ 
++import com.google.gson.Gson;
++
+ public class Downloader implements Runnable {
+-    private static final int MAX_RETRIES = 10;
+-    private final Proxy proxy;
+-    private final String currentMd5;
+-    private final File targetFile;
+-    private final Downloader.Controller controller;
+-    private Bootstrap bootstrap;
+-
+-    public Downloader(Downloader.Controller var1, Bootstrap var2, Proxy var3, String var4, File var5) {
+-        this.controller = var1;
+-        this.bootstrap = var2;
+-        this.proxy = var3;
+-        this.currentMd5 = var4;
+-        this.targetFile = var5;
+-    }
+-
+-    public void run() {
+-        int var1 = 0;
+-
+-        while(true) {
+-            ++var1;
+-            if (var1 > 10) {
+-                this.log("Unable to download remote file. Check your internet connection/proxy settings.");
+-                return;
+-            }
+-
+-            try {
+-                URL var2 = new URL("https://s3.amazonaws.com/Minecraft.Download/launcher/launcher.pack.lzma");
+-                HttpsURLConnection var3 = this.getConnection(var2);
+-                var3.setUseCaches(false);
+-                var3.setDefaultUseCaches(false);
+-                var3.setRequestProperty("Cache-Control", "no-store,max-age=0,no-cache");
+-                var3.setRequestProperty("Expires", "0");
+-                var3.setRequestProperty("Pragma", "no-cache");
+-                if (this.currentMd5 != null) {
+-                    var3.setRequestProperty("If-None-Match", this.currentMd5.toLowerCase());
+-                }
+-
+-                var3.setConnectTimeout(30000);
+-                var3.setReadTimeout(10000);
+-                this.log("Downloading: https://s3.amazonaws.com/Minecraft.Download/launcher/launcher.pack.lzma" + (var1 > 1 ? String.format(" (try %d/%d)", var1, 10) : ""));
+-                long var4 = System.nanoTime();
+-                var3.connect();
+-                long var6 = System.nanoTime() - var4;
+-                this.log("Got reply in: " + var6 / 1000000L + "ms");
+-                int var8 = var3.getResponseCode() / 100;
+-                if (var8 == 2) {
+-                    String var9 = var3.getHeaderField("ETag");
+-                    if (var9 == null) {
+-                        var9 = "-";
+-                    } else {
+-                        var9 = var9.substring(1, var9.length() - 1);
+-                    }
+-
+-                    this.controller.foundUpdate.set(true);
+-                    this.controller.foundUpdateLatch.countDown();
+-                    InputStream var10 = var3.getInputStream();
+-                    FileOutputStream var11 = new FileOutputStream(this.targetFile);
+-                    MessageDigest var12 = MessageDigest.getInstance("MD5");
+-                    long var13 = System.nanoTime();
+-                    long var15 = 0L;
+-                    byte[] var17 = new byte[65536];
+-
+-                    try {
+-                        for(int var18 = var10.read(var17); var18 >= 1; var18 = var10.read(var17)) {
+-                            var15 += (long)var18;
+-                            var12.update(var17, 0, var18);
+-                            var11.write(var17, 0, var18);
+-                        }
+-                    } finally {
+-                        var10.close();
+-                        var11.close();
+-                    }
+-
+-                    long var27 = System.nanoTime() - var13;
+-                    float var20 = (float)(1L + var27) / 1.0E9F;
+-                    float var21 = (float)var15 / 1024.0F;
+-                    this.log(String.format("Downloaded %.1fkb in %ds at %.1fkb/s", var21, (int)var20, var21 / var20));
+-                    String var22 = String.format("%1$032x", new BigInteger(1, var12.digest()));
+-                    if (var9.contains("-") || var9.equalsIgnoreCase(var22)) {
+-                        this.controller.hasDownloadedLatch.countDown();
+-                        return;
+-                    }
+-
+-                    this.log("After downloading, the MD5 hash didn't match. Retrying");
+-                } else {
+-                    if (var8 != 4) {
+-                        this.controller.foundUpdate.set(false);
+-                        this.controller.foundUpdateLatch.countDown();
+-                        this.log("No update found.");
+-                        return;
+-                    }
+-
+-                    this.log("Remote file not found.");
+-                }
+-            } catch (Exception var26) {
+-                this.log("Exception: " + var26.toString());
+-                this.suggestHelp(var26);
+-            }
+-        }
+-    }
+-
+-    public void suggestHelp(Throwable var1) {
+-        if (var1 instanceof BindException) {
+-            this.log("Recognized exception: the likely cause is a broken ipv4/6 stack. Check your TCP/IP settings.");
+-        } else if (var1 instanceof SSLHandshakeException) {
+-            this.log("Recognized exception: the likely cause is a set of broken/missing root-certificates. Check your java install and perhaps reinstall it.");
+-        }
+-
+-    }
+-
+-    public void log(String var1) {
+-        this.bootstrap.println(var1);
+-    }
+-
+-    public HttpsURLConnection getConnection(URL var1) throws IOException {
+-        return (HttpsURLConnection)var1.openConnection(this.proxy);
+-    }
+-
+-    public static class Controller {
+-        public final CountDownLatch foundUpdateLatch = new CountDownLatch(1);
+-        public final AtomicBoolean foundUpdate = new AtomicBoolean(false);
+-        public final CountDownLatch hasDownloadedLatch = new CountDownLatch(1);
+-
+-        public Controller() {
+-        }
+-    }
++	private static final int MAX_RETRIES = 10;
++	private static final String LAUNCHER_BASE_URL = "https://launcher.mojang.com/v1/objects/%s/launcher.jar";
++
++	private final Proxy proxy;
++	private final String currentPatchDigest;
++	private final File targetPatchFile;
++	private final String currentLauncherSHA1;
++	private final File targetLauncherFile;
++	private final Downloader.Controller controller;
++	private Bootstrap bootstrap;
++
++	public Downloader(Downloader.Controller controller, Bootstrap bootstrap, Proxy proxy, String currentPatchDigest,
++			File targetPatchFile, String currentLauncherSHA1, File targetLauncherFile) {
++		this.controller = controller;
++		this.bootstrap = bootstrap;
++		this.proxy = proxy;
++		this.currentLauncherSHA1 = currentLauncherSHA1;
++		this.targetLauncherFile = targetLauncherFile;
++		this.currentPatchDigest = currentPatchDigest;
++		this.targetPatchFile = targetPatchFile;
++	}
++
++	private UpdateInformations fetchLatestReleaseInformations(String releaseInformationsURL) {
++		try {
++			URL url = new URL(releaseInformationsURL);
++			HttpsURLConnection urlConn = getConnection(url);
++			urlConn.setUseCaches(false);
++			urlConn.setDefaultUseCaches(false);
++			urlConn.setRequestProperty("Cache-Control", "no-store,max-age=0,no-cache");
++			urlConn.setRequestProperty("Expires", "0");
++			urlConn.setRequestProperty("Pragma", "no-cache");
++			log("Checking update informations at: " + releaseInformationsURL);
++			long nanoResponseTime = System.nanoTime();
++			urlConn.connect();
++			int responseCode = urlConn.getResponseCode();
++			nanoResponseTime = System.nanoTime() - nanoResponseTime;
++			log("Got reply in: " + nanoResponseTime / 1000000L + "ms");
++			if (responseCode == 200) {
++				Gson gson = new Gson();
++				AssetsList list = gson.fromJson(new InputStreamReader(urlConn.getInputStream()), AssetsList.class);
++				AssetsList.Asset matchingAsset = null;
++				for (AssetsList.Asset asset : list.getAssets()) {
++					if (asset.getContentType().equalsIgnoreCase("application/x-bsdiff")) {
++						matchingAsset = asset;
++					}
++				}
++				if (matchingAsset == null) {
++					log("The release didn't contain the necessary update informations.");
++					return null;
++				}
++				log("Successfully fetched launcher update informations");
++				if (!matchingAsset.getAssetDigest().startsWith("sha256:")) {
++					log("The release informations contained an abnormal digest: " + matchingAsset.getAssetDigest());
++					return null;
++				}
++				return new UpdateInformations(matchingAsset.getDownloadUrl(),
++						matchingAsset.getAssetDigest().replace("sha256:", ""));
++
++			} else {
++				log("Update informations failed to be fetched with response code " + responseCode + " "
++						+ urlConn.getResponseMessage());
++			}
++		} catch (Exception e) {
++			log("Exception: " + e.toString());
++			suggestHelp(e);
++		}
++		return null;
++
++	}
++
++	private boolean downloadFile(String sourceURL, File targetFile, String targetDigest, boolean usingSHA1) {
++		byte buff[] = new byte[65536];
++
++		for (int i = 0; i < MAX_RETRIES; i++) {
++			BufferedOutputStream output = null;
++			BufferedInputStream input = null;
++			try {
++				URL url = new URL(sourceURL);
++				HttpsURLConnection urlConn = getConnection(url);
++				urlConn.setUseCaches(false);
++				urlConn.setDefaultUseCaches(false);
++				urlConn.setRequestProperty("Cache-Control", "no-store,max-age=0,no-cache");
++				urlConn.setRequestProperty("Expires", "0");
++				urlConn.setRequestProperty("Pragma", "no-cache");
++
++				/* Same settings */
++				urlConn.setConnectTimeout(30000);
++				urlConn.setReadTimeout(10000);
++
++				log("Downloading: " + sourceURL + (i > 0 ? String.format(" (try %d/%d)", i + 1, 10) : ""));
++				long nanoResponseTime = System.nanoTime();
++				urlConn.connect();
++				int responseCode = urlConn.getResponseCode();
++				nanoResponseTime = System.nanoTime() - nanoResponseTime;
++				log("Got reply in: " + nanoResponseTime / 1000000L + "ms");
++				if (responseCode == 200) {
++					input = new BufferedInputStream(urlConn.getInputStream());
++					output = new BufferedOutputStream(new FileOutputStream(targetFile));
++					long nanoDownloadTime = System.nanoTime();
++					MessageDigest digest = MessageDigest.getInstance(usingSHA1 ? "SHA-1" : "SHA-256");
++					long downloadedBytes = 0;
++					int readedSize = input.read(buff, 0, buff.length);
++					while (readedSize >= 0) {
++						downloadedBytes += readedSize;
++						output.write(buff, 0, readedSize);
++						digest.update(buff, 0, readedSize);
++						readedSize = input.read(buff, 0, buff.length);
++					}
++					nanoDownloadTime = System.nanoTime() - nanoDownloadTime;
++					float downloadTimeSecs = nanoDownloadTime / 1000000000f;
++					float downloadedKilobytes = downloadedBytes / 1024f;
++
++					log(String.format("Downloaded %.1fkb in %ds at %.1fkb/s", downloadedKilobytes,
++							Math.round(downloadTimeSecs), downloadedKilobytes / downloadTimeSecs));
++					input.close();
++					output.close();
++
++					byte[] digestBytes = digest.digest();
++					String digestString = String.format(usingSHA1 ? "%1$032x" : "%1$064x",
++							new BigInteger(1, digestBytes));
++					if (!digestString.equalsIgnoreCase(targetDigest)) {
++						this.log("After downloading, the " + (usingSHA1 ? "SHA-1" : "SHA-256")
++								+ " hash didn't match. Retrying");
++						continue;
++					}
++
++					return true;
++				} else {
++					log("Remote file failed to be downloaded with response code " + responseCode + " "
++							+ urlConn.getResponseMessage());
++				}
++			} catch (Exception e) {
++				this.log("Exception: " + e.toString());
++				this.suggestHelp(e);
++				if (output != null) {
++					try {
++						output.close();
++					} catch (IOException e1) {
++						this.log("Exception: " + e1.toString());
++					}
++				}
++				if (input != null) {
++					try {
++						input.close();
++					} catch (IOException e1) {
++						this.log("Exception: " + e1.toString());
++					}
++				}
++			}
++
++		}
++		this.log("Unable to download remote file. Check your internet connection/proxy settings.");
++		return false;
++	}
++
++	@Override
++	public void run() {
++		// olauncher - rewrite to support downloading files for the launcher
++		boolean mustDownloadPatch = false;
++		boolean mustDownloadOriginalLauncher = false;
++
++		UpdateInformations infos = fetchLatestReleaseInformations(Bootstrap.LATEST_RELEASE_URL);
++		if (infos == null) {
++			return;
++		}
++		if (currentPatchDigest == null || !currentPatchDigest.equalsIgnoreCase(infos.getFileDigest())) {
++			mustDownloadPatch = true;
++		}
++
++		if (currentLauncherSHA1 == null || !currentLauncherSHA1.equalsIgnoreCase(Bootstrap.VANILLA_LAUNCHER_HASH)) {
++			mustDownloadOriginalLauncher = true;
++		}
++		controller.foundUpdate.set(mustDownloadOriginalLauncher || mustDownloadPatch);
++		controller.foundUpdateLatch.countDown();
++
++		if (!mustDownloadOriginalLauncher && !mustDownloadPatch) {
++			return;
++		}
++
++		if (mustDownloadOriginalLauncher) {
++			if (!downloadFile(String.format(LAUNCHER_BASE_URL, Bootstrap.VANILLA_LAUNCHER_HASH), targetLauncherFile,
++					Bootstrap.VANILLA_LAUNCHER_HASH, true)) {
++				return;
++			}
++		}
++		if (mustDownloadPatch) {
++			if (!downloadFile(infos.getDownloadUrl(), targetPatchFile, infos.getFileDigest(), false)) {
++				return;
++			}
++		}
++		controller.hasDownloadedLatch.countDown();
++	}
++
++	public void suggestHelp(Throwable var1) {
++		if (var1 instanceof BindException) {
++			this.log("Recognized exception: the likely cause is a broken ipv4/6 stack. Check your TCP/IP settings.");
++		} else if (var1 instanceof SSLHandshakeException) {
++			this.log("Recognized exception: the likely cause is a set of broken/missing root-certificates. Check your java install and perhaps reinstall it.");
++		}
++
++	}
++
++	public void log(String var1) {
++		this.bootstrap.println(var1);
++	}
++
++	public HttpsURLConnection getConnection(URL var1) throws IOException {
++		return (HttpsURLConnection)var1.openConnection(this.proxy);
++	}
++
++	public static class Controller {
++		public final CountDownLatch foundUpdateLatch = new CountDownLatch(1);
++		public final AtomicBoolean foundUpdate = new AtomicBoolean(false);
++		public final CountDownLatch hasDownloadedLatch = new CountDownLatch(1);
++
++		public Controller() {
++		}
++	}
+ }
+diff --git a/src/main/java/net/minecraft/bootstrap/UpdateInformations.java b/src/main/java/net/minecraft/bootstrap/UpdateInformations.java
+new file mode 100644
+index 0000000..469f575
+--- /dev/null
++++ b/src/main/java/net/minecraft/bootstrap/UpdateInformations.java
+@@ -0,0 +1,21 @@
++package net.minecraft.bootstrap;
++
++public class UpdateInformations {
++
++	private String downloadUrl;
++	private String fileDigest;
++
++	public UpdateInformations(String downloadUrl, String fileDigest) {
++		this.downloadUrl = downloadUrl;
++		this.fileDigest = fileDigest;
++	}
++
++	public String getDownloadUrl() {
++		return downloadUrl;
++	}
++
++	public String getFileDigest() {
++		return fileDigest;
++	}
++
++}
+-- 
+2.53.0
+
