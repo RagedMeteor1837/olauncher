@@ -1,0 +1,59 @@
+From 9c05a041a2ff86a62da28a2201c41e4c80f944ba Mon Sep 17 00:00:00 2001
+From: ExplodingBottle <72459125+ExplodingBottle@users.noreply.github.com>
+Date: Sun, 28 Jun 2026 18:41:54 +0200
+Subject: [PATCH] Fix for launcher title and icon when using bootstrap
+
+
+diff --git a/src/main/java/net/minecraft/launcher/SwingUserInterface.java b/src/main/java/net/minecraft/launcher/SwingUserInterface.java
+index cb8ecc8..9d51771 100644
+--- a/src/main/java/net/minecraft/launcher/SwingUserInterface.java
++++ b/src/main/java/net/minecraft/launcher/SwingUserInterface.java
+@@ -7,16 +7,21 @@ import com.mojang.launcher.OperatingSystem;
+ import com.mojang.launcher.events.GameOutputLogProcessor;
+ import com.mojang.launcher.updater.DownloadProgress;
+ import com.mojang.launcher.versions.CompleteVersion;
++
++import java.awt.Dimension;
+ import java.awt.event.WindowAdapter;
+ import java.awt.event.WindowEvent;
+ import java.io.File;
+ import java.io.IOException;
++import java.io.InputStream;
+ import java.net.URI;
+ import java.net.URISyntaxException;
+ import java.util.Timer;
+ import java.util.TimerTask;
+ import java.util.UUID;
+ import java.util.concurrent.TimeUnit;
++
++import javax.imageio.ImageIO;
+ import javax.swing.BorderFactory;
+ import javax.swing.Icon;
+ import javax.swing.JFrame;
+@@ -89,6 +94,8 @@ public class SwingUserInterface implements MinecraftUserInterface {
+ 
+     public void initializeFrame() {
+         this.frame.getContentPane().removeAll();
++        this.frame.setTitle(SwingUserInterface.WINDOW_TITLE == null ? LauncherVersion.getLauncherName() + " " + LauncherVersion.getVersion() + LauncherConstants.PROPERTIES.getEnvironment().getTitle() : SwingUserInterface.WINDOW_TITLE); // olauncher - update version
++        this.frame.setPreferredSize(new Dimension(900, 580));
+         this.frame.setDefaultCloseOperation(2);
+         this.frame.addWindowListener(new WindowAdapter() {
+             public void windowClosing(WindowEvent var1) {
+@@ -111,6 +118,14 @@ public class SwingUserInterface implements MinecraftUserInterface {
+                 SwingUserInterface.this.forcefullyShutdown();
+             }
+         });
++        
++        try {
++            InputStream var1 = Launcher.class.getResourceAsStream("/favicon.png");
++            if (var1 != null) {
++                this.frame.setIconImage(ImageIO.read(var1));
++            }
++        } catch (IOException var2) {
++        }
+ 
+         this.launcherPanel = new LauncherPanel(this.minecraftLauncher);
+         SwingUtilities.invokeLater(new Runnable() {
+-- 
+2.53.0
+
