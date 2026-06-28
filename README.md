@@ -38,7 +38,8 @@ These commands must be run in the following order to build from source:
 - `mvn clean package`
   - Builds and packages the patched launcher using Maven.
 - `genredist.sh` (optional)
-  - Generates the redistributable JAR - Do not distribute the JARs in `olauncher/target`!
+  - Generates the redistributable JAR - Do not distribute the JARs in `olauncher/target`
+and in `bootstrap-olauncher/target`!
 
 ## Other scripts
 - `clean.sh`
@@ -46,4 +47,5 @@ These commands must be run in the following order to build from source:
 - `maintain.sh`
   - Provides maintenance utilities for the launcher build.
 - `rebuildPatches.sh`
-  - Regenerates patch files by cleaning and updating them against the current repository state.
+  - Regenerates patch files by cleaning and updating them against the current repository state.<br>
+  You can choose whether to rebuild patches for `launcher` (by default), `bootstrap` or `all`
