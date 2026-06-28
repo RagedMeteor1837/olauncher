@@ -1,0 +1,22 @@
+From f089c0f5356ad536861fef6cfa5845993de9d4e6 Mon Sep 17 00:00:00 2001
+From: ExplodingBottle <72459125+ExplodingBottle@users.noreply.github.com>
+Date: Sun, 28 Jun 2026 18:57:10 +0200
+Subject: [PATCH] Configure the releases URL
+
+
+diff --git a/src/main/java/net/minecraft/bootstrap/Bootstrap.java b/src/main/java/net/minecraft/bootstrap/Bootstrap.java
+index 4f217ed..86bdfad 100644
+--- a/src/main/java/net/minecraft/bootstrap/Bootstrap.java
++++ b/src/main/java/net/minecraft/bootstrap/Bootstrap.java
+@@ -53,7 +53,7 @@ public class Bootstrap extends JFrame {
+ 	private static final Font MONOSPACED = new Font("Monospaced", 0, 12);
+     
+     public static final String VANILLA_LAUNCHER_HASH = "eabbff5ff8e21250e33670924a0c5e38f47c840b";
+-    public static final String LATEST_RELEASE_URL = "https://api.github.com/repos/ExplodingBottle/olauncher/releases/latest";
++    public static final String LATEST_RELEASE_URL = "https://api.github.com/repos/RagedMeteor1837/olauncher/releases/latest";
+     
+     private final File workDir;
+     private final Proxy proxy;
+-- 
+2.53.0
+
