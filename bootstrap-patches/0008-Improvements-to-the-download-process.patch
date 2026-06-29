@@ -1,0 +1,72 @@
+From 79b2c0d23bd91e31091ac4650be058a0ea212929 Mon Sep 17 00:00:00 2001
+From: ExplodingBottle <72459125+ExplodingBottle@users.noreply.github.com>
+Date: Mon, 29 Jun 2026 11:36:24 +0200
+Subject: [PATCH] Improvements to the download process
+
+
+diff --git a/src/main/java/net/minecraft/bootstrap/Downloader.java b/src/main/java/net/minecraft/bootstrap/Downloader.java
+index fa2f178..e93e1ba 100644
+--- a/src/main/java/net/minecraft/bootstrap/Downloader.java
++++ b/src/main/java/net/minecraft/bootstrap/Downloader.java
+@@ -51,7 +51,7 @@ public class Downloader implements Runnable {
+ 			urlConn.setRequestProperty("Cache-Control", "no-store,max-age=0,no-cache");
+ 			urlConn.setRequestProperty("Expires", "0");
+ 			urlConn.setRequestProperty("Pragma", "no-cache");
+-			log("Checking update informations at: " + releaseInformationsURL);
++			log("Checking informations: " + releaseInformationsURL);
+ 			long nanoResponseTime = System.nanoTime();
+ 			urlConn.connect();
+ 			int responseCode = urlConn.getResponseCode();
+@@ -182,11 +182,15 @@ public class Downloader implements Runnable {
+ 		boolean mustDownloadOriginalLauncher = false;
+ 
+ 		UpdateInformations infos = fetchLatestReleaseInformations(Bootstrap.LATEST_RELEASE_URL);
+-		if (infos == null) {
+-			return;
+-		}
+-		if (currentPatchDigest == null || !currentPatchDigest.equalsIgnoreCase(infos.getFileDigest())) {
+-			mustDownloadPatch = true;
++		/*
++		 * Allow continuing if the file is already downloaded
++		 */
++		if (infos != null) {
++			if (currentPatchDigest == null || !currentPatchDigest.equalsIgnoreCase(infos.getFileDigest())) {
++				mustDownloadPatch = true;
++			}
++		} else {
++			mustDownloadPatch = currentPatchDigest == null;
+ 		}
+ 
+ 		if (currentLauncherSHA1 == null || !currentLauncherSHA1.equalsIgnoreCase(Bootstrap.VANILLA_LAUNCHER_HASH)) {
+@@ -200,17 +204,23 @@ public class Downloader implements Runnable {
+ 		}
+ 
+ 		if (mustDownloadOriginalLauncher) {
+-			if (!downloadFile(String.format(LAUNCHER_BASE_URL, Bootstrap.VANILLA_LAUNCHER_HASH), targetLauncherFile,
++			if (downloadFile(String.format(LAUNCHER_BASE_URL, Bootstrap.VANILLA_LAUNCHER_HASH), targetLauncherFile,
+ 					Bootstrap.VANILLA_LAUNCHER_HASH, true)) {
+-				return;
++				mustDownloadOriginalLauncher = false;
+ 			}
+ 		}
+ 		if (mustDownloadPatch) {
+-			if (!downloadFile(infos.getDownloadUrl(), targetPatchFile, infos.getFileDigest(), false)) {
+-				return;
++			if (infos != null) {
++				if (downloadFile(infos.getDownloadUrl(), targetPatchFile, infos.getFileDigest(), false)) {
++					mustDownloadPatch = false;
++				}
+ 			}
++
++		}
++
++		if (!mustDownloadOriginalLauncher && !mustDownloadPatch) {
++			controller.hasDownloadedLatch.countDown();
+ 		}
+-		controller.hasDownloadedLatch.countDown();
+ 	}
+ 
+ 	public void suggestHelp(Throwable var1) {
+-- 
+2.53.0
+
