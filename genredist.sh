@@ -65,14 +65,14 @@ echo "Generating properties..."
 (
 cat - << EOP
 origurl=https://web.archive.org/web/20221007091726if_/https://s3.amazonaws.com/Minecraft.Download/launcher/Minecraft.jar
-orighash=$(sha1sum "../bootstrap.jar" | cut -d ' ' -f 1)
+orighash=$(shasum -a 1 "../bootstrap.jar" | cut -d ' ' -f 1)
 origname=Minecraft.jar
-origsz=$(du -b "../bootstrap.jar" | cut -f 1)
+origsz=$(wc -c < "../bootstrap.jar" | tr -d ' ')
 patchres=/bootstrap.bsdiff
-patchsz=$(du -b "bootstrap.bsdiff" | cut -f 1)
-finalhash=$(sha1sum "$basedir/bootstrap-olauncher/target/bootstrap-olauncher-${BOOTSTRAP_VERSION}.jar" | cut -d ' ' -f 1)
+patchsz=$(wc -c < "bootstrap.bsdiff" | tr -d ' ')
+finalhash=$(shasum -a 1 "$basedir/bootstrap-olauncher/target/bootstrap-olauncher-${BOOTSTRAP_VERSION}.jar" | cut -d ' ' -f 1)
 finalname=patched.jar
-finalsz=$(du -b "$basedir/bootstrap-olauncher/target/bootstrap-olauncher-${BOOTSTRAP_VERSION}.jar" | cut -f 1)
+finalsz=$(wc -c < "$basedir/bootstrap-olauncher/target/bootstrap-olauncher-${BOOTSTRAP_VERSION}.jar" | tr -d ' ')
 interactive=true
 buildtimestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 #mainClass=
