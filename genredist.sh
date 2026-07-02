@@ -25,7 +25,8 @@ OLAUNCHER_VERSION=2.3.1
 AUTOOL_VERSION=0.1.1
 BOOTSTRAP_VERSION=1.6.0
 
-finalname="olauncher-$OLAUNCHER_VERSION-redist.jar"
+finalname="olauncher-bootstrap-$BOOTSTRAP_VERSION.jar"
+patchname="olauncher-$OLAUNCHER_VERSION-launcher.bsdiff"
 
 if [ ! -e "$autooldir" ]; then
   echo "The AutoOL directory could not be found. Please run 'git submodule update --init'"
@@ -50,7 +51,7 @@ if [ "$mvnresult" != "0" ]; then
 fi
 
 echo "Generating launcher patch..."
-if ! java -jar "jbsdiff/target/jbsdiff-1.0.jar" diff "../launcher.jar" "$basedir/olauncher/target/olauncher-${OLAUNCHER_VERSION}.jar" "launcher.bsdiff" || [ ! -e "launcher.bsdiff" ]; then
+if ! java -jar "jbsdiff/target/jbsdiff-1.0.jar" diff "../launcher.jar" "$basedir/olauncher/target/olauncher-${OLAUNCHER_VERSION}.jar" $patchname || [ ! -e $patchname ]; then
   echo "Error creating patch"
   exit 1
 fi
@@ -90,5 +91,5 @@ if [ "$jarres" != "0" ]; then
 fi
 
 mv "$finalname" "$basedir/$finalname"
-mv "launcher.bsdiff" "$basedir/launcher.bsdiff"
-echo "Redistributable created with name $finalname"
+mv "$patchname" "$basedir/$patchname"
+echo "Patch created with name $patchname and bootstrap redistribuable created with name $finalname"

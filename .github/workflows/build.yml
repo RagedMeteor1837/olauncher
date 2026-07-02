@@ -90,15 +90,15 @@ jobs:
     - name: Rename dev build artifact
       if: github.ref == 'refs/heads/dev'
       run: |
-        mv olauncher-*-redist.jar olauncher-${{ env.OUTER_SHA }}-redist.jar    
+        mv olauncher-*-launcher.bsdiff olauncher-${{ env.OUTER_SHA }}-launcher.bsdiff
     - name: Upload redistributable
       uses: actions/upload-artifact@v7
       id: upload-artifact
       with:
         name: OLauncher Components
         path: |
-          olauncher-*-redist.jar
-          launcher.bsdiff
+          olauncher-bootstrap-*.jar
+          olauncher-*-launcher.bsdiff
   draft-master-release:
     if: ${{ github.ref_type == 'tag' }}
     needs: build
