@@ -28,7 +28,11 @@ applyPatches() {
     git fetch upstream
     git reset --hard upstream/master
     git am --abort > /dev/null 2>&1
-    git am --3way --no-gpg-sign --ignore-whitespace "$basedir/${from}-patches/"*.patch
+
+
+    if [ -n "$( ls -A $basedir/${from}-patches )" ]; then
+        git am --3way --no-gpg-sign --ignore-whitespace "$basedir/${from}-patches/"*.patch
+    fi
     patchresult=$?
     popd
 
@@ -41,3 +45,4 @@ applyPatches() {
 }
 
 applyPatches launcher olauncher || exit 1
+applyPatches bootstrap bootstrap-olauncher || exit 1

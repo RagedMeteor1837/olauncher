@@ -1,0 +1,22 @@
+From 1b54722dd7dcd585b2e0d8d3943cf41447cdf80c Mon Sep 17 00:00:00 2001
+From: ExplodingBottle <72459125+ExplodingBottle@users.noreply.github.com>
+Date: Sun, 28 Jun 2026 21:42:29 +0200
+Subject: [PATCH] Fix for broken launcher dependencies
+
+
+diff --git a/src/main/java/net/minecraft/bootstrap/Bootstrap.java b/src/main/java/net/minecraft/bootstrap/Bootstrap.java
+index 86bdfad..0997605 100644
+--- a/src/main/java/net/minecraft/bootstrap/Bootstrap.java
++++ b/src/main/java/net/minecraft/bootstrap/Bootstrap.java
+@@ -234,7 +234,7 @@ public class Bootstrap extends JFrame {
+         try {
+             /* The class loader must not be closed because it is used by the launcher */
+             @SuppressWarnings("resource")
+-			URLClassLoader classLoader = new URLClassLoader(new URL[]{var1.toURI().toURL()});
++			URLClassLoader classLoader = new URLClassLoader(new URL[]{var1.toURI().toURL()}, null);
+             Class<?> var2 = classLoader.loadClass("net.minecraft.launcher.Launcher");
+             Constructor<?> var3 = var2.getConstructor(JFrame.class, File.class, Proxy.class, PasswordAuthentication.class, String[].class, Integer.class);
+             var3.newInstance(this, this.workDir, this.proxy, this.proxyAuth, this.remainderArgs, BootstrapConstants.BOOTSTRAP_VERSION_NUMBER);
+-- 
+2.53.0
+

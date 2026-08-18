@@ -1,0 +1,103 @@
+From 21a1df107ec80317cac48bd38a0a0232aa80cdea Mon Sep 17 00:00:00 2001
+From: ExplodingBottle <72459125+ExplodingBottle@users.noreply.github.com>
+Date: Sun, 28 Jun 2026 17:23:53 +0200
+Subject: [PATCH] Fixing warnings and memory leaks
+
+
+diff --git a/src/main/java/net/minecraft/bootstrap/Bootstrap.java b/src/main/java/net/minecraft/bootstrap/Bootstrap.java
+index f1929e9..4f217ed 100644
+--- a/src/main/java/net/minecraft/bootstrap/Bootstrap.java
++++ b/src/main/java/net/minecraft/bootstrap/Bootstrap.java
+@@ -231,10 +231,12 @@ public class Bootstrap extends JFrame {
+ 
+     public void startLauncher(File var1) {
+         this.println("Starting launcher.");
+-
+         try {
+-            Class var2 = (new URLClassLoader(new URL[]{var1.toURI().toURL()})).loadClass("net.minecraft.launcher.Launcher");
+-            Constructor var3 = var2.getConstructor(JFrame.class, File.class, Proxy.class, PasswordAuthentication.class, String[].class, Integer.class);
++            /* The class loader must not be closed because it is used by the launcher */
++            @SuppressWarnings("resource")
++			URLClassLoader classLoader = new URLClassLoader(new URL[]{var1.toURI().toURL()});
++            Class<?> var2 = classLoader.loadClass("net.minecraft.launcher.Launcher");
++            Constructor<?> var3 = var2.getConstructor(JFrame.class, File.class, Proxy.class, PasswordAuthentication.class, String[].class, Integer.class);
+             var3.newInstance(this, this.workDir, this.proxy, this.proxyAuth, this.remainderArgs, BootstrapConstants.BOOTSTRAP_VERSION_NUMBER);
+         } catch (Exception var4) {
+             throw new FatalBootstrapError("Unable to start: " + var4);
+@@ -288,10 +290,12 @@ public class Bootstrap extends JFrame {
+ 
+         FileChannel var2 = null;
+         FileChannel var3 = null;
+-
+-        try {
+-            var2 = (new FileInputStream(var0)).getChannel();
+-            var3 = (new FileOutputStream(var1)).getChannel();
++        
++        // olauncher - fixing a memory leak
++        try (FileInputStream input = new FileInputStream(var0);
++        		FileOutputStream output = new FileOutputStream(var1)){
++            var2 = input.getChannel();
++            var3 = output.getChannel();
+             var3.transferFrom(var2, 0L, var2.size());
+         } finally {
+             if (var2 != null) {
+@@ -312,12 +316,13 @@ public class Bootstrap extends JFrame {
+         var1.allowsUnrecognizedOptions();
+         var1.accepts("help", "Show help").forHelp();
+         var1.accepts("force", "Force updating");
+-        ArgumentAcceptingOptionSpec var2 = var1.accepts("proxyHost", "Optional").withRequiredArg();
+-        ArgumentAcceptingOptionSpec var3 = var1.accepts("proxyPort", "Optional").withRequiredArg().defaultsTo("8080", new String[0]).ofType(Integer.class);
+-        ArgumentAcceptingOptionSpec var4 = var1.accepts("proxyUser", "Optional").withRequiredArg();
+-        ArgumentAcceptingOptionSpec var5 = var1.accepts("proxyPass", "Optional").withRequiredArg();
+-        ArgumentAcceptingOptionSpec var6 = var1.accepts("workDir", "Optional").withRequiredArg().ofType(File.class).defaultsTo(Util.getWorkingDirectory(), new File[0]);
+-        NonOptionArgumentSpec var7 = var1.nonOptions();
++        // olauncher - fixing issues with generic types
++        ArgumentAcceptingOptionSpec<String> var2 = var1.accepts("proxyHost", "Optional").withRequiredArg();
++        ArgumentAcceptingOptionSpec<Integer> var3 = var1.accepts("proxyPort", "Optional").withRequiredArg().defaultsTo("8080", new String[0]).ofType(Integer.class);
++        ArgumentAcceptingOptionSpec<String> var4 = var1.accepts("proxyUser", "Optional").withRequiredArg();
++        ArgumentAcceptingOptionSpec<String> var5 = var1.accepts("proxyPass", "Optional").withRequiredArg();
++        ArgumentAcceptingOptionSpec<File> var6 = var1.accepts("workDir", "Optional").withRequiredArg().ofType(File.class).defaultsTo(Util.getWorkingDirectory(), new File[0]);
++        NonOptionArgumentSpec<String> var7 = var1.nonOptions();
+ 
+         OptionSet var8;
+         try {
+@@ -359,7 +364,8 @@ public class Bootstrap extends JFrame {
+             } else if (!var14.exists() && !var14.mkdirs()) {
+                 throw new FatalBootstrapError("Unable to create directory: " + var14);
+             } else {
+-                List var15 = var8.valuesOf(var7);
++            	// olauncher - fixing an issue with generic types
++                List<String> var15 = var8.valuesOf(var7);
+                 String[] var16 = (String[])var15.toArray(new String[var15.size()]);
+                 boolean var17 = var8.has("force");
+                 Bootstrap var18 = new Bootstrap(var14, var10, var13, var16);
+diff --git a/src/main/java/net/minecraft/bootstrap/BootstrapConstants.java b/src/main/java/net/minecraft/bootstrap/BootstrapConstants.java
+index 45af2cd..3743150 100644
+--- a/src/main/java/net/minecraft/bootstrap/BootstrapConstants.java
++++ b/src/main/java/net/minecraft/bootstrap/BootstrapConstants.java
+@@ -2,7 +2,4 @@ package net.minecraft.bootstrap;
+ 
+ public class BootstrapConstants {
+     public static final int BOOTSTRAP_VERSION_NUMBER = 6; // olauncher - new bootstrap version here
+-
+-    public BootstrapConstants() {
+-    }
+ }
+diff --git a/src/main/java/net/minecraft/bootstrap/FatalBootstrapError.java b/src/main/java/net/minecraft/bootstrap/FatalBootstrapError.java
+index 01c137b..cb80da3 100644
+--- a/src/main/java/net/minecraft/bootstrap/FatalBootstrapError.java
++++ b/src/main/java/net/minecraft/bootstrap/FatalBootstrapError.java
+@@ -1,7 +1,9 @@
+ package net.minecraft.bootstrap;
+ 
+ public class FatalBootstrapError extends RuntimeException {
+-    public FatalBootstrapError(String var1) {
++    private static final long serialVersionUID = 1L;
++
++	public FatalBootstrapError(String var1) {
+         super(var1);
+     }
+ }
+-- 
+2.53.0
+

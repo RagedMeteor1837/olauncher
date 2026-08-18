@@ -20,16 +20,54 @@
 basedir=$(pwd)
 workdir=$basedir/work
 decompdir=$workdir/decomp
-vanilladir=$basedir/launcher
-olauncherdir=$basedir/olauncher
 
-if [ ! -e "$vanilladir" ]; then
-    echo "Copying vanilla sources..."
-    mkdir -p "$vanilladir"
-    pushd "$vanilladir"
+vanilla_launcher_dir=$basedir/launcher
+vanilla_bootstrap_dir=$basedir/bootstrap
+
+init_component() {
+    decomp_comp_name=$1
+    target_path=$2
+    mkdir -p "$target_path"
+    pushd "$target_path"
     git init
-    cp -rv ${decompdir}/* .
+    cp -rv "$decompdir/$decomp_comp_name"/* .
     git add --all
     git commit --no-gpg-sign -m "Initial commit"
     popd
+    echo "Component $decomp_comp_name initialized!"
+}
+
+if [ ! -e "$vanilladir" ]; then
+    echo "Copying vanilla sources..."
+
+    init_component "launcher" $vanilla_launcher_dir
+    init_component "bootstrap" $vanilla_bootstrap_dir
+
+fi
+
+if [ ! -e "$workdir/redist" ]; then
+  mkdir -pv "$workdir/redist"
+fi
+
+cd "$workdir/redist"
+
+# Building jbsdiff here because it is a requirement for the bootstrap
+if [ ! -e "jbsdiff" ]; then
+  echo jbsdiff not found! Downloading...
+
+  if ! git clone https://github.com/malensek/jbsdiff.git; then
+    echo "Error cloning jbsdiff repository"
+    exit 1
+  fi
+
+  pushd "jbsdiff"
+  git checkout 51b6981d97b4cf386069481707394f37c537b1d5
+  mvn clean install -Djdk.version=8
+  mvnresult="$?"
+  popd
+
+  if [ "$mvnresult" != "0" ]; then
+    echo "Error building jbsdiff"
+    exit 1
+  fi
 fi

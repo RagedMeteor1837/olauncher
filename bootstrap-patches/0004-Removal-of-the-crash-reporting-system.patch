@@ -1,0 +1,384 @@
+From bcfde9b0bf570808247174f218009b8fbc904f35 Mon Sep 17 00:00:00 2001
+From: ExplodingBottle <72459125+ExplodingBottle@users.noreply.github.com>
+Date: Sun, 28 Jun 2026 17:12:38 +0200
+Subject: [PATCH] Removal of the crash reporting system
+
+
+diff --git a/src/main/java/net/minecraft/bootstrap/Bootstrap.java b/src/main/java/net/minecraft/bootstrap/Bootstrap.java
+index c9fda87..f1929e9 100644
+--- a/src/main/java/net/minecraft/bootstrap/Bootstrap.java
++++ b/src/main/java/net/minecraft/bootstrap/Bootstrap.java
+@@ -46,7 +46,6 @@ import joptsimple.NonOptionArgumentSpec;
+ import joptsimple.OptionException;
+ import joptsimple.OptionParser;
+ import joptsimple.OptionSet;
+-import net.minecraft.hopper.HopperService;
+ 
+ public class Bootstrap extends JFrame {
+     private static final long serialVersionUID = 1L;
+@@ -370,15 +369,8 @@ public class Bootstrap extends JFrame {
+                 } catch (Throwable var24) {
+                     ByteArrayOutputStream var20 = new ByteArrayOutputStream();
+                     var24.printStackTrace(new PrintStream(var20));
+-                    StringBuilder var21 = new StringBuilder();
+-                    var21.append(var20).append("\n\n-- Head --\nStacktrace:\n").append(var20).append("\n\n").append(var18.outputBuffer);
+-                    var21.append("\tMinecraft.Bootstrap Version: " + BootstrapConstants.BOOTSTRAP_VERSION_NUMBER);
+-
+-                    try {
+-                        HopperService.submitReport(var10, var21.toString(), "Minecraft.Bootstrap", "" + BootstrapConstants.BOOTSTRAP_VERSION_NUMBER);
+-                    } catch (Throwable var23) {
+-                    }
+-
++                    // olauncher - removal of the crash reporting system
++                    
+                     var18.println("FATAL ERROR: " + var20.toString());
+                     var18.println("\nPlease fix the error and restart.");
+                 }
+diff --git a/src/main/java/net/minecraft/hopper/Crash.java b/src/main/java/net/minecraft/hopper/Crash.java
+deleted file mode 100644
+index 10319fe..0000000
+--- a/src/main/java/net/minecraft/hopper/Crash.java
++++ /dev/null
+@@ -1,22 +0,0 @@
+-package net.minecraft.hopper;
+-
+-public class Crash {
+-    private int id;
+-    private String jira_issue;
+-    private String title;
+-
+-    public Crash() {
+-    }
+-
+-    public int getId() {
+-        return this.id;
+-    }
+-
+-    public String getJira_issue() {
+-        return this.jira_issue;
+-    }
+-
+-    public String getTitle() {
+-        return this.title;
+-    }
+-}
+diff --git a/src/main/java/net/minecraft/hopper/HopperService.java b/src/main/java/net/minecraft/hopper/HopperService.java
+deleted file mode 100644
+index 207604d..0000000
+--- a/src/main/java/net/minecraft/hopper/HopperService.java
++++ /dev/null
+@@ -1,61 +0,0 @@
+-package net.minecraft.hopper;
+-
+-import com.google.gson.Gson;
+-import java.io.IOException;
+-import java.net.Proxy;
+-import java.net.URL;
+-import java.util.HashMap;
+-import java.util.Map;
+-
+-public final class HopperService {
+-    private static final String BASE_URL = "http://hopper.minecraft.net/crashes/";
+-    private static final URL ROUTE_SUBMIT = Util.constantURL("http://hopper.minecraft.net/crashes/submit_report/");
+-    private static final URL ROUTE_PUBLISH = Util.constantURL("http://hopper.minecraft.net/crashes/publish_report/");
+-    private static final String[] INTERESTING_SYSTEM_PROPERTY_KEYS = new String[]{"os.version", "os.name", "os.arch", "java.version", "java.vendor", "sun.arch.data.model"};
+-    private static final Gson GSON = new Gson();
+-
+-    public HopperService() {
+-    }
+-
+-    public static SubmitResponse submitReport(Proxy var0, String var1, String var2, String var3) throws IOException {
+-        return submitReport(var0, var1, var2, var3, (Map)null);
+-    }
+-
+-    public static SubmitResponse submitReport(Proxy var0, String var1, String var2, String var3, Map<String, String> var4) throws IOException {
+-        HashMap var5 = new HashMap();
+-        if (var4 != null) {
+-            var5.putAll(var4);
+-        }
+-
+-        String[] var6 = INTERESTING_SYSTEM_PROPERTY_KEYS;
+-        int var7 = var6.length;
+-
+-        for(int var8 = 0; var8 < var7; ++var8) {
+-            String var9 = var6[var8];
+-            String var10 = System.getProperty(var9);
+-            if (var10 != null) {
+-                var5.put(var9, var10);
+-            }
+-        }
+-
+-        SubmitRequest var11 = new SubmitRequest(var1, var2, var3, var5);
+-        return (SubmitResponse)makeRequest(var0, ROUTE_SUBMIT, var11, SubmitResponse.class);
+-    }
+-
+-    public static PublishResponse publishReport(Proxy var0, Report var1) throws IOException {
+-        PublishRequest var2 = new PublishRequest(var1);
+-        return (PublishResponse)makeRequest(var0, ROUTE_PUBLISH, var2, PublishResponse.class);
+-    }
+-
+-    private static <T extends Response> T makeRequest(Proxy var0, URL var1, Object var2, Class<T> var3) throws IOException {
+-        String var4 = Util.performPost(var1, GSON.toJson(var2), var0, "application/json", true);
+-        Response var5 = (Response)GSON.fromJson(var4, var3);
+-        if (var5 == null) {
+-            return null;
+-        } else if (var5.getError() != null) {
+-            throw new IOException(var5.getError());
+-        } else {
+-            return (T)var5;
+-        }
+-    }
+-}
+diff --git a/src/main/java/net/minecraft/hopper/Problem.java b/src/main/java/net/minecraft/hopper/Problem.java
+deleted file mode 100644
+index 049d2e0..0000000
+--- a/src/main/java/net/minecraft/hopper/Problem.java
++++ /dev/null
+@@ -1,22 +0,0 @@
+-package net.minecraft.hopper;
+-
+-public class Problem {
+-    private String title;
+-    private String description;
+-    private String url;
+-
+-    public Problem() {
+-    }
+-
+-    public String getTitle() {
+-        return this.title;
+-    }
+-
+-    public String getDescription() {
+-        return this.description;
+-    }
+-
+-    public String getUrl() {
+-        return this.url;
+-    }
+-}
+diff --git a/src/main/java/net/minecraft/hopper/PublishRequest.java b/src/main/java/net/minecraft/hopper/PublishRequest.java
+deleted file mode 100644
+index 37a97b9..0000000
+--- a/src/main/java/net/minecraft/hopper/PublishRequest.java
++++ /dev/null
+@@ -1,11 +0,0 @@
+-package net.minecraft.hopper;
+-
+-public class PublishRequest {
+-    private String token;
+-    private int report_id;
+-
+-    public PublishRequest(Report var1) {
+-        this.report_id = var1.getId();
+-        this.token = var1.getToken();
+-    }
+-}
+diff --git a/src/main/java/net/minecraft/hopper/PublishResponse.java b/src/main/java/net/minecraft/hopper/PublishResponse.java
+deleted file mode 100644
+index 82bd45e..0000000
+--- a/src/main/java/net/minecraft/hopper/PublishResponse.java
++++ /dev/null
+@@ -1,22 +0,0 @@
+-package net.minecraft.hopper;
+-
+-public class PublishResponse extends Response {
+-    private Report report;
+-    private Crash crash;
+-    private Problem problem;
+-
+-    public PublishResponse() {
+-    }
+-
+-    public Report getReport() {
+-        return this.report;
+-    }
+-
+-    public Crash getCrash() {
+-        return this.crash;
+-    }
+-
+-    public Problem getProblem() {
+-        return this.problem;
+-    }
+-}
+diff --git a/src/main/java/net/minecraft/hopper/Report.java b/src/main/java/net/minecraft/hopper/Report.java
+deleted file mode 100644
+index 00d09e5..0000000
+--- a/src/main/java/net/minecraft/hopper/Report.java
++++ /dev/null
+@@ -1,26 +0,0 @@
+-package net.minecraft.hopper;
+-
+-public class Report {
+-    private int id;
+-    private boolean published;
+-    private String token;
+-
+-    public Report() {
+-    }
+-
+-    public int getId() {
+-        return this.id;
+-    }
+-
+-    public boolean isPublished() {
+-        return this.published;
+-    }
+-
+-    public String getToken() {
+-        return this.token;
+-    }
+-
+-    public boolean canBePublished() {
+-        return this.getToken() != null;
+-    }
+-}
+diff --git a/src/main/java/net/minecraft/hopper/Response.java b/src/main/java/net/minecraft/hopper/Response.java
+deleted file mode 100644
+index 4ab585f..0000000
+--- a/src/main/java/net/minecraft/hopper/Response.java
++++ /dev/null
+@@ -1,12 +0,0 @@
+-package net.minecraft.hopper;
+-
+-public class Response {
+-    private String error;
+-
+-    public Response() {
+-    }
+-
+-    public String getError() {
+-        return this.error;
+-    }
+-}
+diff --git a/src/main/java/net/minecraft/hopper/SubmitRequest.java b/src/main/java/net/minecraft/hopper/SubmitRequest.java
+deleted file mode 100644
+index 135229f..0000000
+--- a/src/main/java/net/minecraft/hopper/SubmitRequest.java
++++ /dev/null
+@@ -1,17 +0,0 @@
+-package net.minecraft.hopper;
+-
+-import java.util.Map;
+-
+-public class SubmitRequest {
+-    private String report;
+-    private String version;
+-    private String product;
+-    private Map<String, String> environment;
+-
+-    public SubmitRequest(String var1, String var2, String var3, Map<String, String> var4) {
+-        this.report = var1;
+-        this.version = var3;
+-        this.product = var2;
+-        this.environment = var4;
+-    }
+-}
+diff --git a/src/main/java/net/minecraft/hopper/SubmitResponse.java b/src/main/java/net/minecraft/hopper/SubmitResponse.java
+deleted file mode 100644
+index 74a13b4..0000000
+--- a/src/main/java/net/minecraft/hopper/SubmitResponse.java
++++ /dev/null
+@@ -1,22 +0,0 @@
+-package net.minecraft.hopper;
+-
+-public class SubmitResponse extends Response {
+-    private Report report;
+-    private Crash crash;
+-    private Problem problem;
+-
+-    public SubmitResponse() {
+-    }
+-
+-    public Report getReport() {
+-        return this.report;
+-    }
+-
+-    public Crash getCrash() {
+-        return this.crash;
+-    }
+-
+-    public Problem getProblem() {
+-        return this.problem;
+-    }
+-}
+diff --git a/src/main/java/net/minecraft/hopper/Util.java b/src/main/java/net/minecraft/hopper/Util.java
+deleted file mode 100644
+index 070de7b..0000000
+--- a/src/main/java/net/minecraft/hopper/Util.java
++++ /dev/null
+@@ -1,70 +0,0 @@
+-package net.minecraft.hopper;
+-
+-import java.io.BufferedReader;
+-import java.io.DataOutputStream;
+-import java.io.IOException;
+-import java.io.InputStream;
+-import java.io.InputStreamReader;
+-import java.net.HttpURLConnection;
+-import java.net.MalformedURLException;
+-import java.net.Proxy;
+-import java.net.URL;
+-import java.nio.charset.Charset;
+-
+-public class Util {
+-    public Util() {
+-    }
+-
+-    public static String performPost(URL var0, String var1, Proxy var2, String var3, boolean var4) throws IOException {
+-        HttpURLConnection var5 = (HttpURLConnection)var0.openConnection(var2);
+-        byte[] var6 = var1.getBytes(Charset.forName("UTF-8"));
+-        var5.setConnectTimeout(15000);
+-        var5.setReadTimeout(15000);
+-        var5.setRequestMethod("POST");
+-        var5.setRequestProperty("Content-Type", var3 + "; charset=utf-8");
+-        var5.setRequestProperty("Content-Length", "" + var6.length);
+-        var5.setRequestProperty("Content-Language", "en-US");
+-        var5.setUseCaches(false);
+-        var5.setDoInput(true);
+-        var5.setDoOutput(true);
+-        DataOutputStream var7 = new DataOutputStream(var5.getOutputStream());
+-        var7.write(var6);
+-        var7.flush();
+-        var7.close();
+-
+-        BufferedReader var8;
+-        try {
+-            var8 = new BufferedReader(new InputStreamReader(var5.getInputStream()));
+-        } catch (IOException var11) {
+-            if (!var4) {
+-                throw var11;
+-            }
+-
+-            InputStream var10 = var5.getErrorStream();
+-            if (var10 == null) {
+-                throw var11;
+-            }
+-
+-            var8 = new BufferedReader(new InputStreamReader(var10));
+-        }
+-
+-        StringBuilder var12 = new StringBuilder();
+-
+-        String var9;
+-        while((var9 = var8.readLine()) != null) {
+-            var12.append(var9);
+-            var12.append('\r');
+-        }
+-
+-        var8.close();
+-        return var12.toString();
+-    }
+-
+-    public static URL constantURL(String var0) {
+-        try {
+-            return new URL(var0);
+-        } catch (MalformedURLException var2) {
+-            throw new Error(var2);
+-        }
+-    }
+-}
+-- 
+2.53.0
+

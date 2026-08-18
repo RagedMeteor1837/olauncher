@@ -17,5 +17,6 @@
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 rm -rf work
-rm -rf launcher olauncher
+rm -rf bootstrap bootstrap-olauncher launcher olauncher
 rm olauncher-*-redist.jar
+rm launcher.bsdiff

@@ -1,0 +1,84 @@
+From c8aa142e91ef4a6e0cc6690fc26e6844c41fb4bd Mon Sep 17 00:00:00 2001
+From: ExplodingBottle <72459125+ExplodingBottle@users.noreply.github.com>
+Date: Sun, 28 Jun 2026 11:59:56 +0200
+Subject: [PATCH] Added support for new bootstrap
+
+
+diff --git a/src/main/java/net/minecraft/launcher/Launcher.java b/src/main/java/net/minecraft/launcher/Launcher.java
+index d525bd1..5ed867d 100644
+--- a/src/main/java/net/minecraft/launcher/Launcher.java
++++ b/src/main/java/net/minecraft/launcher/Launcher.java
+@@ -88,7 +88,7 @@ public class Launcher {
+     }
+ 
+     public Launcher(JFrame var1, File var2, Proxy var3, PasswordAuthentication var4, String[] var5) {
+-        this(var1, var2, var3, var4, var5, 0);
++        this(var1, var2, var3, var4, var5, LauncherConstants.UNVERSIONED_BOOTSTRAP_VERSION);
+     }
+ 
+     public Launcher(JFrame var1, File var2, Proxy var3, PasswordAuthentication var4, String[] var5, Integer var6) {
+@@ -99,7 +99,7 @@ public class Launcher {
+         this.setupErrorHandling();
+         this.bootstrapVersion = var6;
+         this.userInterface = this.selectUserInterface(var1);
+-        if (var6 < 4) {
++        if (var6 < LauncherConstants.MINIMUM_BOOTSTRAP_SUPPORTED) {
+             this.userInterface.showOutdatedNotice();
+             System.exit(0);
+             throw new Error("Outdated bootstrap");
+diff --git a/src/main/java/net/minecraft/launcher/LauncherConstants.java b/src/main/java/net/minecraft/launcher/LauncherConstants.java
+index 26c9674..9d7d4fb 100644
+--- a/src/main/java/net/minecraft/launcher/LauncherConstants.java
++++ b/src/main/java/net/minecraft/launcher/LauncherConstants.java
+@@ -33,6 +33,12 @@ public class LauncherConstants {
+     public static final URI URL_UPGRADE_OSX = constantURI("https://launcher.mojang.com/download/Minecraft.dmg");
+     public static final int MAX_NATIVES_LIFE_IN_SECONDS = 3600;
+     public static final int MAX_SKIN_LIFE_IN_SECONDS = 604800;
++    public static final int UNVERSIONED_BOOTSTRAP_VERSION = 0;
++    public static final int MINIMUM_BOOTSTRAP_SUPPORTED = 6;
++    public static final int LAST_OFFICIAL_OLD_BOOTSTRAP_VERSION = 5;
++    public static final int SUPER_COOL_BOOTSTRAP_VERSION = 100;
++    public static final String URL_BOOTSTRAP_DOWNLOAD = "https://github.com/RagedMeteor1837/olauncher/releases/latest";
++    
+     public static final LauncherConstants.LauncherProperties PROPERTIES = getProperties();
+ 
+     public LauncherConstants() {
+diff --git a/src/main/java/net/minecraft/launcher/SwingUserInterface.java b/src/main/java/net/minecraft/launcher/SwingUserInterface.java
+index 4923796..cb8ecc8 100644
+--- a/src/main/java/net/minecraft/launcher/SwingUserInterface.java
++++ b/src/main/java/net/minecraft/launcher/SwingUserInterface.java
+@@ -140,14 +140,14 @@ public class SwingUserInterface implements MinecraftUserInterface {
+     }
+ 
+     public void showOutdatedNotice() {
+-        String var1 = "Sorry, but your launcher is outdated! Please redownload it at https://mojang.com/2013/06/minecraft-1-6-pre-release/";
++        String var1 = "Sorry, but your launcher is outdated! Please redownload it at " + LauncherConstants.URL_BOOTSTRAP_DOWNLOAD;
+         this.frame.getContentPane().removeAll();
+         int var2 = JOptionPane.showOptionDialog(this.frame, var1, "Outdated launcher", 0, 0, (Icon)null, LauncherConstants.BOOTSTRAP_OUT_OF_DATE_BUTTONS, LauncherConstants.BOOTSTRAP_OUT_OF_DATE_BUTTONS[0]);
+         if (var2 == 0) {
+             try {
+-                OperatingSystem.openLink(new URI("https://mojang.com/2013/06/minecraft-1-6-pre-release/"));
++                OperatingSystem.openLink(new URI(LauncherConstants.URL_BOOTSTRAP_DOWNLOAD));
+             } catch (URISyntaxException var4) {
+-                LOGGER.error("Couldn't open bootstrap download link!", var4);
++            	LOGGER.error("Couldn't open bootstrap download link. Please visit " + LauncherConstants.URL_BOOTSTRAP_DOWNLOAD + " manually.", var4);
+             }
+         }
+ 
+diff --git a/src/main/java/net/minecraft/launcher/ui/LauncherPanel.java b/src/main/java/net/minecraft/launcher/ui/LauncherPanel.java
+index 711b417..caa585d 100644
+--- a/src/main/java/net/minecraft/launcher/ui/LauncherPanel.java
++++ b/src/main/java/net/minecraft/launcher/ui/LauncherPanel.java
+@@ -48,7 +48,8 @@ public class LauncherPanel extends JPanel {
+     protected JPanel createLauncherInterface() {
+         JPanel var1 = new JPanel(new BorderLayout());
+         this.tabPanel.getBlog().setPage(LauncherConstants.URL_BLOG);
+-        boolean var2 = this.getMinecraftLauncher().getBootstrapVersion() < 100;
++        // olauncher - don't give warning for the custom bootstrap
++        boolean var2 = this.getMinecraftLauncher().getBootstrapVersion() < LauncherConstants.SUPER_COOL_BOOTSTRAP_VERSION && this.getMinecraftLauncher().getBootstrapVersion() <= LauncherConstants.LAST_OFFICIAL_OLD_BOOTSTRAP_VERSION;
+         boolean var3 = OperatingSystem.getCurrentPlatform() == OperatingSystem.WINDOWS;
+         if (OperatingSystem.getCurrentPlatform() == OperatingSystem.OSX) {
+             String var4 = SystemUtils.OS_VERSION;
+-- 
+2.53.0
+

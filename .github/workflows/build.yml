@@ -71,7 +71,7 @@ jobs:
         echo "INNER_SHA=$(git rev-parse --short=7 HEAD)" >> $GITHUB_ENV
         if [ -z "$(git status --porcelain)" ]; then echo "INNER_DIRTY=clean" >> $GITHUB_ENV; else echo "INNER_DIRTY=dirty" >> $GITHUB_ENV; fi
         popd >/dev/null
-    - name: Build with Maven
+    - name: Build launcher with Maven
       working-directory: olauncher
       run: |
         mvn --batch-mode --update-snapshots verify \
@@ -81,19 +81,24 @@ jobs:
           -Dinner.sha="${{ env.INNER_SHA }}" \
           -Douter.dirty="${{ env.OUTER_DIRTY }}" \
           -Dinner.dirty="${{ env.INNER_DIRTY }}"
+    - name: Build bootstrap with Maven
+      working-directory: bootstrap-olauncher
+      run: |
+        mvn --batch-mode --update-snapshots verify
     - name: Generate redistributable
       run: bash genredist.sh
     - name: Rename dev build artifact
       if: github.ref == 'refs/heads/dev'
       run: |
-        mv olauncher-*-redist.jar olauncher-${{ env.OUTER_SHA }}-redist.jar    
+        mv olauncher-*-launcher.bsdiff olauncher-${{ env.OUTER_SHA }}-launcher.bsdiff
     - name: Upload redistributable
       uses: actions/upload-artifact@v7
       id: upload-artifact
       with:
-        name: OLauncher Redistributable JAR
-        path: olauncher-*-redist.jar
-
+        name: OLauncher Components
+        path: |
+          olauncher-bootstrap-*.jar
+          olauncher-*-launcher.bsdiff
   draft-master-release:
     if: ${{ github.ref_type == 'tag' }}
     needs: build
@@ -116,10 +121,12 @@ jobs:
           ARTIFACT_PATH: ${{ steps.download-artifact.outputs.download-path }}
         run: |
           REDIST_SHA256=$(sha256sum "$ARTIFACT_PATH"/*.jar | awk '{print $1}')
+          PATCH_SHA256=$(sha256sum "$ARTIFACT_PATH"/*.bsdiff | awk '{print $1}')
           NOTES="redist-sha256: $REDIST_SHA256"
+          NOTES=$(printf 'patch-sha256: %s\nredist-sha256: %s' "$PATCH_SHA256" "$REDIST_SHA256")
           gh release create "$RELEASE_TAG" --draft --verify-tag --title "$RELEASE_TAG" \
             --notes "$NOTES" \
-            "$ARTIFACT_PATH"/*.jar
+            "$ARTIFACT_PATH"/*.*
 
   dev-release:
     if: ${{ github.ref == 'refs/heads/dev' }}
@@ -128,7 +135,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Download redistributable jar
+      - name: Download files
         uses: actions/download-artifact@v7
         id: download-artifact
         with:
@@ -144,11 +151,12 @@ jobs:
           COMMIT_SHA: ${{ github.sha }}
         run: |
           REDIST_SHA256=$(sha256sum "$ARTIFACT_PATH"/*.jar | awk '{print $1}')
-          NOTES=$(printf 'build-sha: %s\nredist-sha256: %s' "$COMMIT_SHA" "$REDIST_SHA256")
+          PATCH_SHA256=$(sha256sum "$ARTIFACT_PATH"/*.bsdiff | awk '{print $1}')
+          NOTES=$(printf 'build-sha: %s\npatch-sha256: %s\nredist-sha256: %s' "$COMMIT_SHA" "$PATCH_SHA256" "$REDIST_SHA256")
           gh release create "$DEV_TAG" \
             --draft \
             --prerelease \
             --title "$DEV_TAG" \
             --notes "$NOTES" \
             --target "$COMMIT_SHA" \
-            "$ARTIFACT_PATH"/*.jar
+            "$ARTIFACT_PATH"/*.*

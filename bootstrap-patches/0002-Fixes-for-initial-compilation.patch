@@ -1,0 +1,50 @@
+From 1aa8bf81ca97a83421473cfbc55e88ba24954645 Mon Sep 17 00:00:00 2001
+From: ExplodingBottle <72459125+ExplodingBottle@users.noreply.github.com>
+Date: Wed, 24 Jun 2026 15:39:12 +0200
+Subject: [PATCH] Fixes for initial compilation
+
+
+diff --git a/src/main/java/net/minecraft/bootstrap/Bootstrap.java b/src/main/java/net/minecraft/bootstrap/Bootstrap.java
+index fe3bf13..6d94b33 100644
+--- a/src/main/java/net/minecraft/bootstrap/Bootstrap.java
++++ b/src/main/java/net/minecraft/bootstrap/Bootstrap.java
+@@ -336,19 +336,20 @@ public class Bootstrap extends JFrame {
+             Proxy var10 = Proxy.NO_PROXY;
+             if (var9 != null) {
+                 try {
+-                    var10 = new Proxy(Type.SOCKS, new InetSocketAddress(var9, (Integer)var8.valueOf(var3)));
++                    var10 = new Proxy(java.net.Proxy.Type.SOCKS, new InetSocketAddress(var9, (Integer)var8.valueOf(var3)));
+                 } catch (Exception var25) {
+                 }
+             }
+ 
+             String var11 = (String)var8.valueOf(var4);
+             String var12 = (String)var8.valueOf(var5);
+-            final PasswordAuthentication var13 = null;
++            PasswordAuthentication var13 = null;
+             if (!var10.equals(Proxy.NO_PROXY) && stringHasValue(var11) && stringHasValue(var12)) {
+                 var13 = new PasswordAuthentication(var11, var12.toCharArray());
++                final PasswordAuthentication pwdAuth = var13;
+                 Authenticator.setDefault(new Authenticator() {
+                     protected PasswordAuthentication getPasswordAuthentication() {
+-                        return var13;
++                        return pwdAuth;
+                     }
+                 });
+             }
+diff --git a/src/main/java/net/minecraft/hopper/HopperService.java b/src/main/java/net/minecraft/hopper/HopperService.java
+index 90d2aca..207604d 100644
+--- a/src/main/java/net/minecraft/hopper/HopperService.java
++++ b/src/main/java/net/minecraft/hopper/HopperService.java
+@@ -55,7 +55,7 @@ public final class HopperService {
+         } else if (var5.getError() != null) {
+             throw new IOException(var5.getError());
+         } else {
+-            return var5;
++            return (T)var5;
+         }
+     }
+ }
+-- 
+2.43.0
+
