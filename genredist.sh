@@ -21,7 +21,7 @@ basedir=$(pwd)
 autooldir=$basedir/AutoOL
 workdir=$basedir/work
 
-OLAUNCHER_VERSION=2.3.1
+OLAUNCHER_VERSION=2.3.2
 AUTOOL_VERSION=0.1.1
 BOOTSTRAP_VERSION=1.6.0
 
