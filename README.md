@@ -17,7 +17,6 @@ This project is maintained on a best-effort basis and updates will only be made 
   - You can still provide your own JVMs
 - Update checking
 - Displays latest release notes
-- ~~Displays Mojang server status~~
 - Custom launch arguments
 
 ## Build from source
@@ -38,7 +37,8 @@ These commands must be run in the following order to build from source:
 - `mvn clean package`
   - Builds and packages the patched launcher using Maven.
 - `genredist.sh` (optional)
-  - Generates the redistributable JAR - Do not distribute the JARs in `olauncher/target`!
+  - Generates the redistributable JAR - Do not distribute the JARs in `olauncher/target`
+and in `bootstrap-olauncher/target`!
 
 ## Other scripts
 - `clean.sh`
@@ -46,14 +46,33 @@ These commands must be run in the following order to build from source:
 - `maintain.sh`
   - Provides maintenance utilities for the launcher build.
 - `rebuildPatches.sh`
-  - Regenerates patch files by cleaning and updating them against the current repository state.
+  - Regenerates patch files by cleaning and updating them against the current repository state.<br>
+  You can choose whether to rebuild patches for `launcher` (by default), `bootstrap` or `all`
 
----
+## Credits
 
-## License
+olauncher was originally created by [bigfoot547](https://github.com/bigfoot547). This fork is maintained by [RagedMeteor1837](https://github.com/RagedMeteor1837).
 
-Copyright (C) 2025 RagedMeteor1837
+### This fork
+- [RagedMeteor1837](https://github.com/RagedMeteor1837) - maintainer
+- [ExplodingBottle](https://github.com/ExplodingBottle) - bootstrap support and bug fixes
 
-This project is licensed under the GNU General Public License v3.0 — see the [LICENSE](LICENSE) file for details.
+### Original olauncher
+These contributors' work from the original project is included in this fork:
 
-This project is a fork of [olauncher/olauncher](https://github.com/olauncher/olauncher), which was originally licensed under GNU GPL v3, then relicensed to CC0 1.0 Universal. New contributions in this fork are licensed under GNU GPL v3.
+- [bigfoot547](https://github.com/bigfoot547) - original author of olauncher and AutoOL
+- [DevBefell](https://github.com/DevBefell) - profile migration fixes, profile backups, internal overhaul
+- [exrodev](https://github.com/exrodev) - version manifest v2 and various fixes
+- [vops](https://github.com/vopswtf) - demo profiles
+
+See the [upstream contributors](https://github.com/olauncher/olauncher/graphs/contributors) for everyone who has worked on the original project.
+
+### Third-party
+- [Mojang Studios](https://www.minecraft.net) - the original launcher and the game itself
+- [Microsoft / Xbox](https://www.microsoft.com) - Microsoft account and Xbox authentication
+- [Internet Archive](https://web.archive.org) - preserving the original launcher bootstrap
+- [Fernflower](https://github.com/JetBrains/fernflower) - decompiler used by the build scripts
+- [jbsdiff](https://github.com/malensek/jbsdiff) - binary patching for the bootstrap
+- [XZ for Java](https://tukaani.org/xz/java.html), Gson, Guava, Apache Commons, Log4j, jopt-simple, OpenJFX, Lombok
+
+olauncher is not affiliated with or endorsed by Mojang Studios or Microsoft.
