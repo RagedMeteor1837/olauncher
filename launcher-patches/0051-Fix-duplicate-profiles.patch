@@ -1,0 +1,186 @@
+From 51cd4cd3b3b16ef5cae8d23ec77baebdaf2a83f1 Mon Sep 17 00:00:00 2001
+From: RagedMeteor1837 <148640131+RagedMeteor1837@users.noreply.github.com>
+Date: Sun, 27 Sep 2026 13:18:33 +0100
+Subject: [PATCH] Fix duplicate profiles
+
+
+diff --git a/src/main/java/net/minecraft/launcher/profile/Profile.java b/src/main/java/net/minecraft/launcher/profile/Profile.java
+index e20e817..0aed8ff 100644
+--- a/src/main/java/net/minecraft/launcher/profile/Profile.java
++++ b/src/main/java/net/minecraft/launcher/profile/Profile.java
+@@ -25,6 +25,7 @@ public class Profile implements Comparable<Profile> {
+     public static final Set<MinecraftReleaseType> DEFAULT_RELEASE_TYPES;
+     private transient String uniqueName;
+     private String name;
++    private String type;
+     private File gameDir;
+     private String lastVersionId;
+     private String javaDir;
+@@ -43,6 +44,7 @@ public class Profile implements Comparable<Profile> {
+     public Profile(Profile var1) {
+         this.uniqueName = var1.uniqueName; // olauncher - includes unique name
+         this.name = var1.name;
++        this.type = var1.type; // olauncher - preserve profile type
+         this.gameDir = var1.gameDir;
+         this.playerUUID = var1.playerUUID;
+         this.lastVersionId = var1.lastVersionId;
+@@ -67,6 +69,17 @@ public class Profile implements Comparable<Profile> {
+         this.name = var1;
+     }
+ 
++    // olauncher start - fix duplicate profiles
++    // https://github.com/RagedMeteor1837/olauncher/issues/20
++    public String getType() {
++        return this.type;
++    }
++
++    public void setType(String var1) {
++        this.type = var1;
++    }
++    // olauncher end
++
+     public File getGameDir() {
+         return this.gameDir;
+     }
+diff --git a/src/main/java/net/minecraft/launcher/profile/ProfileManager.java b/src/main/java/net/minecraft/launcher/profile/ProfileManager.java
+index 371c3d6..6b5761c 100644
+--- a/src/main/java/net/minecraft/launcher/profile/ProfileManager.java
++++ b/src/main/java/net/minecraft/launcher/profile/ProfileManager.java
+@@ -37,6 +37,7 @@ import java.util.HashSet;
+ 
+ import dev.figboot.olauncher.auth.MicrosoftAuthenticationService;
+ import dev.figboot.olauncher.launcher.profile.AccountsDatabase;
++import dev.figboot.olauncher.util.UUIDGenerator;
+ import net.minecraft.launcher.Launcher;
+ import net.minecraft.launcher.LauncherConstants;
+ import net.minecraft.launcher.game.MinecraftReleaseType;
+@@ -127,12 +128,12 @@ public class ProfileManager {
+                     value.setUniqueName(key);
+                     String name = value.getName();
+                     if (name.isEmpty()) {
+-                        // Fallback use last version ID
+-                        name = value.getLastVersionId();
+-                        // Make sure last version ID is set
+-                        if (name == null) {
+-                            value.setLastVersionId("latest-version");
++                        // Make sure last version ID is set, preferring the vanilla profile type
++                        if (value.getLastVersionId() == null) {
++                            value.setLastVersionId(isLatestType(value.getType()) ? value.getType() : "latest-version");
+                         }
++                        // Fallback use profile type, then last version ID
++                        name = isLatestType(value.getType()) ? value.getType() : value.getLastVersionId();
+                         if (name.equals("latest-release")) {
+                             name = "Latest Version";
+                         } else if (name.equals("latest-snapshot")) {
+@@ -144,20 +145,90 @@ public class ProfileManager {
+                     return value;
+                 });
+ 
++                // olauncher - fix duplicate profiles
++                // https://github.com/RagedMeteor1837/olauncher/issues/20
++                for (String latestType : new String[]{"latest-release", "latest-snapshot"}) {
++                    String typedKey = null;
++                    for (Map.Entry<String, Profile> entry : var4.profiles.entrySet()) {
++                        if (latestType.equals(entry.getValue().getType())) {
++                            typedKey = entry.getKey();
++                            break;
++                        }
++                    }
++                    if (typedKey == null) {
++                        continue;
++                    }
++                    String generatedName = latestType.equals("latest-release") ? "Latest Version" : "Latest Snapshot";
++                    Iterator<Map.Entry<String, Profile>> it = var4.profiles.entrySet().iterator();
++                    while (it.hasNext()) {
++                        Map.Entry<String, Profile> entry = it.next();
++                        Profile profile = entry.getValue();
++                        if (profile.getType() == null && generatedName.equals(profile.getName()) && latestType.equals(profile.getLastVersionId())) {
++                            LOGGER.info("Removing duplicate profile " + generatedName);
++                            if (entry.getKey().equals(var4.selectedProfile)) {
++                                var4.selectedProfile = typedKey;
++                            }
++                            it.remove();
++                        }
++                    }
++                }
++
+                 // olauncher end
+ 
+                 this.profiles.putAll(var4.profiles);
+                 this.selectedProfile = var4.selectedProfile;
++                this.ensureLatestProfiles(); // olauncher - create vanilla latest profiles
+                 this.fireRefreshEvent();
+                 this.fireUserChangedEvent();
+                 return true;
+             }
+         }
++        this.ensureLatestProfiles(); // olauncher - create vanilla latest profiles
+         this.fireRefreshEvent();
+         this.fireUserChangedEvent();
+         return false;
+     }
+ 
++    // olauncher - vanilla launcher profile types that track the latest version
++    private static boolean isLatestType(String type) {
++        return "latest-release".equals(type) || "latest-snapshot".equals(type);
++    }
++
++    // olauncher start
++    // https://github.com/RagedMeteor1837/olauncher/issues/20
++    private void ensureLatestProfiles() {
++        for (String latestType : new String[]{"latest-release", "latest-snapshot"}) {
++            String generatedName = latestType.equals("latest-release") ? "Latest Version" : "Latest Snapshot";
++            Profile untyped = null;
++            boolean found = false;
++            for (Profile profile : this.profiles.values()) {
++                if (latestType.equals(profile.getType())) {
++                    found = true;
++                    break;
++                }
++                if (untyped == null && profile.getType() == null && generatedName.equals(profile.getName()) && latestType.equals(profile.getLastVersionId())) {
++                    untyped = profile;
++                }
++            }
++            if (found) {
++                continue;
++            }
++            if (untyped != null) {
++                // Adopt the profile an older olauncher version saved without its type
++                untyped.setType(latestType);
++                continue;
++            }
++            String key = UUIDGenerator.generate();
++            Profile profile = new Profile(generatedName);
++            profile.setUniqueName(key);
++            profile.setType(latestType);
++            profile.setLastVersionId(latestType);
++            this.profiles.put(key, profile);
++            LOGGER.info("Created profile " + generatedName);
++        }
++    }
++    // olauncher end
++
+     public void fireRefreshEvent() {
+         Iterator var1 = Lists.newArrayList(this.refreshedProfilesListeners).iterator();
+ 
+@@ -180,8 +251,17 @@ public class ProfileManager {
+ 
+     public Profile getSelectedProfile() {
+         if (this.selectedProfile == null || !this.profiles.containsKey(this.selectedProfile)) {
++            String latestRelease = null; // olauncher - prefer the latest release profile
++            for (Profile profile : this.profiles.values()) {
++                if ("latest-release".equals(profile.getType())) {
++                    latestRelease = profile.getUniqueName();
++                    break;
++                }
++            }
+             if (this.profiles.get("(Default)") != null) {
+                 this.selectedProfile = "(Default)";
++            } else if (latestRelease != null) {
++                this.selectedProfile = latestRelease;
+             } else if (this.profiles.size() > 0) {
+                 this.selectedProfile = ((Profile) this.profiles.values().iterator().next()).getUniqueName(); // olauncher - use unique name
+             } else {
+-- 
+2.54.0 (Apple Git-157)
+
