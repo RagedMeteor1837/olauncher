@@ -1,0 +1,22 @@
+From cac99fa015f7e1a9d380ac7c63c89c78b8a855f1 Mon Sep 17 00:00:00 2001
+From: RagedMeteor1837 <148640131+RagedMeteor1837@users.noreply.github.com>
+Date: Wed, 11 Nov 2026 20:24:01 +0000
+Subject: [PATCH] Fix crash when adding new profile
+
+
+diff --git a/src/main/java/net/minecraft/launcher/ui/popups/profile/ProfileVersionPanel.java b/src/main/java/net/minecraft/launcher/ui/popups/profile/ProfileVersionPanel.java
+index 8b79b5a..4e6186f 100644
+--- a/src/main/java/net/minecraft/launcher/ui/popups/profile/ProfileVersionPanel.java
++++ b/src/main/java/net/minecraft/launcher/ui/popups/profile/ProfileVersionPanel.java
+@@ -173,7 +173,7 @@ public class ProfileVersionPanel extends JPanel implements RefreshedVersionsList
+                 this.versionList.addItem(version);
+             }
+         }));
+-        if (var2.startsWith("latest-")){
++        if (var2 != null && var2.startsWith("latest-")){ // olauncher - new profiles have no lastVersionId
+             latest = versionManager.getLatestVersions().get(MinecraftReleaseType.getByName(var2.replace("latest-", "")));
+         }
+         for (VersionSyncInfo versionSyncInfo: versions){
+-- 
+2.54.0 (Apple Git-157)
+
