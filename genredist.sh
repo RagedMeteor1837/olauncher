@@ -82,12 +82,12 @@ cat - << EOP
 origurl=https://launcher.mojang.com/v1/objects/eabbff5ff8e21250e33670924a0c5e38f47c840b/launcher.jar
 orighash=$(sha1sum "../launcher.jar" | cut -d ' ' -f 1)
 origname=launcher.jar
-origsz=$(du -b "../launcher.jar" | cut -f 1)
+origsz=$(wc -c < "../launcher.jar" | tr -d " ")
 patchres=/launcher.patch
-patchsz=$(du -b "launcher.patch" | cut -f 1)
+patchsz=$(wc -c < "launcher.patch" | tr -d " ")
 finalhash=$(sha1sum "$basedir/olauncher/target/olauncher-${OLAUNCHER_VERSION}.jar" | cut -d ' ' -f 1)
 finalname=patched.jar
-finalsz=$(du -b "$basedir/olauncher/target/olauncher-${OLAUNCHER_VERSION}.jar" | cut -f 1)
+finalsz=$(wc -c < "$basedir/olauncher/target/olauncher-${OLAUNCHER_VERSION}.jar" | tr -d " ")
 interactive=true
 #mainClass=
 EOP
